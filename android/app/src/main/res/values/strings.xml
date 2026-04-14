@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">PocketAgent 需要无障碍权限来读取和操控屏幕上的应用界面，让 AI 能帮你完成跨应用操作。</string>
+</resources>

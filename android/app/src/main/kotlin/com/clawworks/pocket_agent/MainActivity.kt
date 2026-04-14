@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ResultReceiver
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,11 +15,77 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val TERMUX_CHANNEL = "com.clawworks.pocket_agent/termux"
     private val INTENT_CHANNEL = "com.clawworks.pocket_agent/intent"
+    private val A11Y_CHANNEL = "com.clawworks.pocket_agent/accessibility"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         setupTermuxChannel(flutterEngine)
         setupIntentChannel(flutterEngine)
+        setupAccessibilityChannel(flutterEngine)
+    }
+
+    // ── Accessibility Channel ───────────────────────────────────
+
+    private fun setupAccessibilityChannel(engine: FlutterEngine) {
+        MethodChannel(engine.dartExecutor.binaryMessenger, A11Y_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                val svc = PocketAgentAccessibilityService.instance
+                when (call.method) {
+                    "isEnabled" -> result.success(svc != null)
+                    "openSettings" -> {
+                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                        result.success(true)
+                    }
+                    "readScreen" -> {
+                        if (svc == null) { result.error("NOT_ENABLED", "无障碍服务未开启", null); return@setMethodCallHandler }
+                        result.success(svc.readScreen())
+                    }
+                    "clickByText" -> {
+                        if (svc == null) { result.error("NOT_ENABLED", "无障碍服务未开启", null); return@setMethodCallHandler }
+                        val text = call.argument<String>("text") ?: ""
+                        result.success(svc.clickByText(text))
+                    }
+                    "clickByIndex" -> {
+                        if (svc == null) { result.error("NOT_ENABLED", "无障碍服务未开启", null); return@setMethodCallHandler }
+                        val index = call.argument<Int>("index") ?: 0
+                        result.success(svc.clickByIndex(index))
+                    }
+                    "tap" -> {
+                        if (svc == null) { result.error("NOT_ENABLED", "无障碍服务未开启", null); return@setMethodCallHandler }
+                        val x = call.argument<Double>("x")?.toFloat() ?: 0f
+                        val y = call.argument<Double>("y")?.toFloat() ?: 0f
+                        result.success(svc.tapAt(x, y))
+                    }
+                    "inputText" -> {
+                        if (svc == null) { result.error("NOT_ENABLED", "无障碍服务未开启", null); return@setMethodCallHandler }
+                        val text = call.argument<String>("text") ?: ""
+                        result.success(svc.inputText(text))
+                    }
+                    "swipe" -> {
+                        if (svc == null) { result.error("NOT_ENABLED", "无障碍服务未开启", null); return@setMethodCallHandler }
+                        val x1 = call.argument<Double>("x1")?.toFloat() ?: 0f
+                        val y1 = call.argument<Double>("y1")?.toFloat() ?: 0f
+                        val x2 = call.argument<Double>("x2")?.toFloat() ?: 0f
+                        val y2 = call.argument<Double>("y2")?.toFloat() ?: 0f
+                        val dur = call.argument<Int>("duration")?.toLong() ?: 300L
+                        result.success(svc.swipe(x1, y1, x2, y2, dur))
+                    }
+                    "globalAction" -> {
+                        if (svc == null) { result.error("NOT_ENABLED", "无障碍服务未开启", null); return@setMethodCallHandler }
+                        val action = call.argument<String>("action") ?: ""
+                        result.success(when (action) {
+                            "back" -> svc.pressBack()
+                            "home" -> svc.pressHome()
+                            "recents" -> svc.pressRecents()
+                            "notifications" -> svc.openNotifications()
+                            else -> false
+                        })
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     // ── Termux Channel ──────────────────────────────────────────

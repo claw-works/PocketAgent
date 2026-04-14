@@ -9,6 +9,7 @@ import '../tools/app_launcher_tool.dart';
 import '../tools/speech_tool.dart';
 import '../tools/termux_tool.dart';
 import '../tools/shortcuts_tool.dart';
+import '../tools/screen_control_tool.dart';
 
 class ToolRegistry {
   final Map<String, BaseTool> _tools = {};
@@ -26,6 +27,7 @@ class ToolRegistry {
     // 平台专属（运行时按平台启用）
     register(TermuxTool());
     register(ShortcutsTool());
+    register(ScreenControlTool());
   }
 
   void register(BaseTool tool) => _tools[tool.name] = tool;

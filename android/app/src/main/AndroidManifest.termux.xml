@@ -1,12 +1,25 @@
 <!-- Merge into your main AndroidManifest.xml after flutter create -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Required to call Termux RUN_COMMAND -->
     <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
 
-    <!-- Query Termux package for isTermuxInstalled check -->
     <queries>
         <package android:name="com.termux" />
     </queries>
+
+    <application>
+        <!-- Accessibility Service for screen reading and UI automation -->
+        <service
+            android:name=".PocketAgentAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+    </application>
 
 </manifest>
