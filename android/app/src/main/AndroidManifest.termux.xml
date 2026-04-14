@@ -1,0 +1,12 @@
+<!-- Merge into your main AndroidManifest.xml after flutter create -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Required to call Termux RUN_COMMAND -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+
+    <!-- Query Termux package for isTermuxInstalled check -->
+    <queries>
+        <package android:name="com.termux" />
+    </queries>
+
+</manifest>
