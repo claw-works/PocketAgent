@@ -5,8 +5,9 @@ import 'providers/llm_provider.dart';
 import 'providers/openai_provider.dart';
 import 'providers/anthropic_provider.dart';
 import 'providers/bedrock_provider.dart';
+import 'providers/gemini_provider.dart';
 
-enum LlmProviderType { openai, anthropic, bedrock }
+enum LlmProviderType { openai, anthropic, bedrock, gemini }
 
 class LlmService {
   final ToolRegistry tools;
@@ -37,12 +38,14 @@ class LlmService {
     LlmProviderType.openai: 'https://api.openai.com',
     LlmProviderType.anthropic: 'https://api.anthropic.com',
     LlmProviderType.bedrock: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+    LlmProviderType.gemini: 'https://generativelanguage.googleapis.com',
   };
 
   static const _defaultModels = {
     LlmProviderType.openai: 'gpt-4o-mini',
     LlmProviderType.anthropic: 'claude-sonnet-4-20250514',
     LlmProviderType.bedrock: 'anthropic.claude-sonnet-4-20250514-v1:0',
+    LlmProviderType.gemini: 'gemini-2.0-flash',
   };
 
   LlmProviderType _parseProvider(String? name) {
@@ -51,6 +54,8 @@ class LlmService {
         return LlmProviderType.anthropic;
       case 'bedrock':
         return LlmProviderType.bedrock;
+      case 'gemini':
+        return LlmProviderType.gemini;
       default:
         return LlmProviderType.openai;
     }
@@ -62,6 +67,8 @@ class LlmService {
         return AnthropicProvider();
       case LlmProviderType.bedrock:
         return BedrockProvider();
+      case LlmProviderType.gemini:
+        return GeminiProvider();
       case LlmProviderType.openai:
         return OpenAiProvider();
     }

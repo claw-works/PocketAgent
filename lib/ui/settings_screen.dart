@@ -15,11 +15,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _modelCtrl = TextEditingController();
   String _provider = 'openai';
 
-  static const _providers = ['openai', 'anthropic', 'bedrock'];
+  static const _providers = ['openai', 'anthropic', 'bedrock', 'gemini'];
   static const _providerLabels = {
     'openai': 'OpenAI',
     'anthropic': 'Anthropic',
-    'bedrock': 'AWS Bedrock',
+    'bedrock': 'Bedrock',
+    'gemini': 'Gemini',
   };
 
   @override
