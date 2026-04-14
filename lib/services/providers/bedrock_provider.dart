@@ -2,10 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'llm_provider.dart';
 
-/// Bedrock provider using the Converse API.
-/// Requires AWS Signature V4 — for MVP we support the simpler approach:
-/// a lightweight proxy (e.g. LiteLLM) that exposes Bedrock as an HTTP endpoint
-/// with API-key auth, OR direct invoke with pre-signed credentials.
+/// Bedrock provider using the Converse API with Bearer Token auth.
+/// Base URL example: https://bedrock-runtime.us-east-1.amazonaws.com
 class BedrockProvider implements LlmProvider {
   @override
   Future<LlmResponse> call({
@@ -45,15 +43,12 @@ class BedrockProvider implements LlmProvider {
         'toolConfig': {'tools': bedrockTools},
     });
 
-    // baseUrl should point to Bedrock runtime endpoint or a proxy
-    // e.g. https://bedrock-runtime.us-east-1.amazonaws.com
+    // baseUrl example: https://bedrock-runtime.us-east-1.amazonaws.com
     final resp = await http.post(
       Uri.parse('$baseUrl/model/$model/converse'),
       headers: {
         'Content-Type': 'application/json',
-        // For direct Bedrock: SigV4 headers would go here.
-        // For proxy (LiteLLM etc): API key auth.
-        if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+        'Authorization': 'Bearer $apiKey',
       },
       body: body,
     );
