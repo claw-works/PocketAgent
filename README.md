@@ -1,112 +1,93 @@
 # PocketAgent 🐾💣
 
-> 一个跑在移动设备上的原生 AI Agent
+> 手机上的私人 AI，直接操控你的手机。
 
-把你的手机或平板变成一台永远在线的私人 AI 宿主机。
+把你的 Android 手机或 iPad 变成一台真正的 AI Agent 宿主机——不依赖云端服务器，不经过任何中转，LLM 直接驱动设备本身的能力。
 
 ## 核心理念
 
-**不需要服务器。不需要 Web Gateway。**
+**本机对话，本机执行。**
 
-PocketAgent 直接运行在你的移动设备上，通过外部 Channel 服务器（Feishu、Telegram 等）收发消息，调用 LLM API 作为大脑，以设备原生能力作为"手脚"来完成任务。
+打开 App，跟 AI 说话，AI 直接操控这台设备完成任务。相机、日历、GPS、快捷指令——这些都是 Agent 的手脚。
 
 ```
-Channel（Feishu / Telegram）
-        ↓
-  PocketAgent（Flutter App）
-        ↓
-  LLM API（Bedrock / OpenAI / LiteLLM）
-        ↓
-  设备原生工具 + Shortcuts
+你说话
+  ↓
+PocketAgent（Flutter App）
+  ↓
+LLM（Bedrock / OpenAI / LiteLLM / 本地模型）
+  ↓
+直接操控本机
 ```
 
-## 为什么是移动设备？
+## 和 Siri / Gemini 的区别
 
-- 📱 随身携带，永远在线
-- 🔋 接电源常驻，iPad Pro M1 算力完全够用
-- 📷 相机、GPS、麦克风——这些是服务器没有的能力
-- 🤖 Android 可接 Termux，获得真实 Linux 环境
-- 🍎 iOS/iPad 可通过 Shortcuts 操控几乎任意 App
+| | Siri / Gemini | PocketAgent |
+|--|--|--|
+| LLM | 厂商锁定 | 自己配，随时换 |
+| 数据隐私 | 上传厂商服务器 | 完全本地，自己掌控 |
+| 工具扩展 | 封闭，不能自定义 | 开放，自己写技能 |
+| 远程接入 | ❌ | ✅ 可选（Feishu / Telegram）|
 
-## 技术架构
-
-### 核心模块
-
-| 模块 | 说明 |
-|------|------|
-| Channel Connector | 连接 Feishu / Telegram 等消息平台 |
-| LLM Engine | 调用 LLM API，处理 Tool Call 循环 |
-| Tool Runtime | 执行原生工具，返回结果 |
-| Skill System | 移动端专属技能体系 |
-| Config Store | 密钥和配置，存储在设备 Keychain |
-
-### 支持平台
-
-- 🥇 **Android**（功能最完整，支持后台常驻、Termux 互操作）
-- 🥈 **iOS / iPad**（核心功能支持，后台通过 Silent Push 保活）
-- 🖥️ **macOS**（桌面版，后续考虑）
-
-## 移动端原生工具（规划中）
+## 本机工具（规划中）
 
 ### 通用（iOS + Android）
-- 📷 拍照 / 读取照片库
+- 📷 拍照 / 读取照片库 / 图像分析
 - 📍 GPS 定位
-- 📅 日历读写
+- 📅 日历 / 提醒事项读写
 - 📋 剪贴板读写
 - 🔔 本地通知
-- 🌐 打开网页 / URL Scheme
-- 🎙️ 语音识别 / TTS
+- 🌐 打开网页 / 唤起其他 App
+- 🎙️ 语音识别 / TTS 朗读
 
 ### Android 专属
-- 🐧 Termux 互操作（真实 Linux shell）
-- 📦 APK 直装，无需过审
+- 🐧 Termux 互操作 — 真实 Linux shell，执行脚本
+- 📦 APK 直装，无需 App Store 审核
 
 ### iOS / iPad 专属
-- ⚡ Shortcuts（快捷指令）触发 — 间接控制任意 App
-- 🔒 Keychain 安全存储
+- ⚡ Shortcuts（快捷指令）触发 — 间接操控任意 App
+- 🔒 Keychain 安全存储密钥
 
-## 后台保活方案
+## 可选：远程 Channel 接入
 
-### Android
-- Foreground Service 常驻，WebSocket 不断线
+不在手边时，可以通过外部消息平台远程控制：
 
-### iOS
 ```
-Channel Server 收到消息
-        ↓
-轻量中转服务发 APNs Silent Push
-        ↓
-App 被唤醒，重连 WebSocket，拉取消息
+Feishu / Telegram
+       ↓
+  PocketAgent
+       ↓
+  操控设备
 ```
+
+这是补充能力，不是核心依赖。
 
 ## 密钥管理
 
-- 所有 API Key 由用户自己配置
-- 存储在设备 Keychain（`flutter_secure_storage`）
+- 所有 API Key 由用户自己配置，存储在设备 Keychain
 - 不经过任何第三方服务器
 
-## 技能体系
+## 支持平台
 
-不移植 OpenClaw 现有技能，重新设计适合移动设备的技能：
-
-- 移动端优先的交互方式
-- 充分利用设备传感器和原生 API
-- 轻量、快速、离线友好
+- 🥇 **Android**（后台 Foreground Service 常驻，功能最完整）
+- 🥈 **iOS / iPad**（核心功能完整，后台通过 Silent Push 保活）
+- 🖥️ **macOS**（后续考虑）
 
 ## 开发路线图
 
-- [ ] MVP：Flutter Android，接通 Feishu，调通 LLM，基础 Tool Call
+- [ ] MVP：Flutter Android，Chat UI，接通 LLM，基础 Tool Call
+- [ ] 本机工具库（相机、日历、GPS、剪贴板）
 - [ ] iOS / iPad 支持
-- [ ] 移动端原生工具库
 - [ ] Shortcuts 集成（iOS）
 - [ ] Termux 互操作（Android）
-- [ ] Silent Push 后台保活（iOS）
 - [ ] 技能系统
-- [ ] 多 Channel 支持（Telegram 等）
+- [ ] 可选 Channel 接入（Feishu / Telegram）
+- [ ] 本地模型支持
 
 ## 灵感来源
 
-一台吃灰的 iPad Pro M1 顶配 + 一个想法：
+一台吃灰的 iPad Pro M1 顶配 + 一个问题：
+
 > 为什么 AI Agent 一定要跑在服务器上？
 
 ---
