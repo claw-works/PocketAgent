@@ -28,8 +28,11 @@ class LlmConfigStore {
   String get activeProvider => _data['active'] as String? ?? 'openai';
 
   Map<String, dynamic> _providerConfig(String provider) {
-    final providers = _data['providers'] as Map<String, dynamic>? ?? {};
-    return Map<String, dynamic>.from(providers[provider] as Map? ?? {});
+    final providers = _data['providers'];
+    if (providers is! Map) return {};
+    final config = providers[provider];
+    if (config is! Map) return {};
+    return Map<String, dynamic>.from(config);
   }
 
   // Active provider's config
@@ -62,8 +65,12 @@ class LlmConfigStore {
       _setProviderField(provider, 'model', v);
 
   Future<void> _setProviderField(String provider, String key, String value) async {
-    final providers = _data['providers'] as Map<String, dynamic>? ?? {};
-    final config = Map<String, dynamic>.from(providers[provider] as Map? ?? {});
+    final providers = _data['providers'] is Map
+        ? Map<String, dynamic>.from(_data['providers'])
+        : <String, dynamic>{};
+    final config = providers[provider] is Map
+        ? Map<String, dynamic>.from(providers[provider])
+        : <String, dynamic>{};
     config[key] = value;
     providers[provider] = config;
     _data['providers'] = providers;
