@@ -6,6 +6,22 @@ import 'llm_provider.dart';
 /// Base URL example: https://bedrock-runtime.us-east-1.amazonaws.com
 class BedrockProvider implements LlmProvider {
   @override
+  Future<LlmResponse> stream({
+    required String apiKey,
+    required String baseUrl,
+    required String model,
+    required String systemPrompt,
+    required List<Map<String, dynamic>> messages,
+    required List<Map<String, dynamic>> tools,
+    required void Function(String delta) onDelta,
+  }) async {
+    // Bedrock converseStream uses event-stream encoding; fallback to non-stream for now
+    final resp = await call(apiKey: apiKey, baseUrl: baseUrl, model: model, systemPrompt: systemPrompt, messages: messages, tools: tools);
+    if (resp.content != null) onDelta(resp.content!);
+    return resp;
+  }
+
+  @override
   Future<LlmResponse> call({
     required String apiKey,
     required String baseUrl,

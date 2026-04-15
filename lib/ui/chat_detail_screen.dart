@@ -23,6 +23,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   late final LlmService _llm;
   late ChatTopic _topic;
   bool _loading = false;
+  // For streaming: the in-progress assistant message
+  String _streamingContent = '';
 
   @override
   void initState() {
@@ -54,14 +56,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     final userMsg = Message(id: _uuid.v4(), role: MessageRole.user, content: text);
     await ChatStore.instance.addMessage(_topic.id, userMsg);
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _streamingContent = '';
+    });
     _scrollToBottom();
 
-    final reply = await _llm.chat(_topic.messages);
+    final reply = await _llm.streamChat(
+      _topic.messages,
+      onDelta: (delta) {
+        setState(() {
+          _streamingContent += delta;
+        });
+        _scrollToBottom();
+      },
+    );
 
     final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: reply);
     await ChatStore.instance.addMessage(_topic.id, assistantMsg);
-    setState(() => _loading = false);
+    setState(() {
+      _loading = false;
+      _streamingContent = '';
+    });
     _scrollToBottom();
   }
 
@@ -73,7 +89,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           children: [
             _header(),
             Expanded(child: _messageList()),
-            if (_loading) _loadingIndicator(),
             _inputBar(),
           ],
         ),
@@ -104,30 +119,47 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _messageList() {
-    if (_topic.messages.isEmpty) {
+    final msgCount = _topic.messages.length;
+    final hasStreaming = _loading && _streamingContent.isNotEmpty;
+    final totalCount = msgCount + (hasStreaming ? 1 : 0) + (_loading && _streamingContent.isEmpty ? 1 : 0);
+
+    if (msgCount == 0 && !_loading) {
       return const Center(
         child: Text('👋 说点什么吧', style: TextStyle(fontSize: 18, color: PAColors.textSecondary)),
       );
     }
+
     return ListView.builder(
       controller: _scrollCtrl,
       padding: const EdgeInsets.all(16),
-      itemCount: _topic.messages.length,
-      itemBuilder: (_, i) => MessageBubble(message: _topic.messages[i]),
-    );
-  }
-
-  Widget _loadingIndicator() {
-    return const Padding(
-      padding: EdgeInsets.all(8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: PAColors.accent)),
-          SizedBox(width: 8),
-          Text('思考中...', style: TextStyle(color: PAColors.textSecondary)),
-        ],
-      ),
+      itemCount: totalCount,
+      itemBuilder: (_, i) {
+        if (i < msgCount) {
+          return MessageBubble(message: _topic.messages[i]);
+        }
+        // Streaming bubble
+        if (hasStreaming && i == msgCount) {
+          return MessageBubble(
+            message: Message(
+              id: 'streaming',
+              role: MessageRole.assistant,
+              content: _streamingContent,
+            ),
+          );
+        }
+        // Loading indicator (before any streaming content arrives)
+        return const Padding(
+          padding: EdgeInsets.all(8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: PAColors.accent)),
+              SizedBox(width: 8),
+              Text('思考中...', style: TextStyle(color: PAColors.textSecondary)),
+            ],
+          ),
+        );
+      },
     );
   }
 

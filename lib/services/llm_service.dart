@@ -1,6 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/message.dart';
 import 'tool_registry.dart';
+import 'agent_config.dart';
 import 'providers/llm_provider.dart';
 import 'providers/openai_provider.dart';
 import 'providers/anthropic_provider.dart';
@@ -13,14 +14,11 @@ class LlmService {
   final ToolRegistry tools;
   final _storage = const FlutterSecureStorage();
 
-  static const _systemPrompt = '你是 PocketAgent，一个运行在用户手机上的私人 AI 助手。'
-      '你可以通过工具直接操控这台设备。回答简洁，用中文。';
-
   static const maxToolRounds = 5;
 
   LlmService({required this.tools});
 
-  // --- Storage keys ---
+  // --- Storage ---
   Future<String?> get apiKey => _storage.read(key: 'api_key');
   Future<void> setApiKey(String v) => _storage.write(key: 'api_key', value: v);
 
@@ -50,32 +48,32 @@ class LlmService {
 
   LlmProviderType _parseProvider(String? name) {
     switch (name) {
-      case 'anthropic':
-        return LlmProviderType.anthropic;
-      case 'bedrock':
-        return LlmProviderType.bedrock;
-      case 'gemini':
-        return LlmProviderType.gemini;
-      default:
-        return LlmProviderType.openai;
+      case 'anthropic': return LlmProviderType.anthropic;
+      case 'bedrock': return LlmProviderType.bedrock;
+      case 'gemini': return LlmProviderType.gemini;
+      default: return LlmProviderType.openai;
     }
   }
 
   LlmProvider _createProvider(LlmProviderType type) {
     switch (type) {
-      case LlmProviderType.anthropic:
-        return AnthropicProvider();
-      case LlmProviderType.bedrock:
-        return BedrockProvider();
-      case LlmProviderType.gemini:
-        return GeminiProvider();
-      case LlmProviderType.openai:
-        return OpenAiProvider();
+      case LlmProviderType.anthropic: return AnthropicProvider();
+      case LlmProviderType.bedrock: return BedrockProvider();
+      case LlmProviderType.gemini: return GeminiProvider();
+      case LlmProviderType.openai: return OpenAiProvider();
     }
   }
 
-  /// Main chat entry — resolves provider, runs tool-call loop.
+  /// Non-streaming chat (legacy).
   Future<String> chat(List<Message> history) async {
+    return streamChat(history, onDelta: (_) {});
+  }
+
+  /// Streaming chat — calls [onDelta] for each text chunk.
+  Future<String> streamChat(
+    List<Message> history, {
+    required void Function(String delta) onDelta,
+  }) async {
     final key = await apiKey;
     if (key == null || key.isEmpty) return '⚠️ 请先在设置中配置 API Key';
 
@@ -83,19 +81,21 @@ class LlmService {
     final provider = _createProvider(type);
     final base = await baseUrl ?? _defaultBaseUrls[type]!;
     final modelName = await model ?? _defaultModels[type]!;
+    final systemPrompt = AgentConfig.instance.systemPrompt;
 
     final messages = history.map((m) => m.toOpenAI()).toList();
 
     for (var i = 0; i < maxToolRounds; i++) {
       final LlmResponse resp;
       try {
-        resp = await provider.call(
+        resp = await provider.stream(
           apiKey: key,
           baseUrl: base,
           model: modelName,
-          systemPrompt: _systemPrompt,
+          systemPrompt: systemPrompt,
           messages: messages,
           tools: tools.toOpenAI(),
+          onDelta: onDelta,
         );
       } catch (e) {
         return '❌ 请求失败: $e';
@@ -105,16 +105,11 @@ class LlmService {
         return resp.content ?? '';
       }
 
-      // Append assistant message with tool calls
+      // Tool call round — execute tools, then loop back (no streaming for tool rounds)
       messages.add(resp.rawAssistantMessage);
-
-      // Execute each tool and append results
       for (final tc in resp.toolCalls) {
         final result = await tools.call(tc.name, tc.arguments);
-        messages.add(provider.buildToolResultMessage(
-          toolCall: tc,
-          result: result,
-        ));
+        messages.add(provider.buildToolResultMessage(toolCall: tc, result: result));
       }
     }
 

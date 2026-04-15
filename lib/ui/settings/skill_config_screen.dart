@@ -3,8 +3,20 @@ import '../widgets/setting_item.dart';
 import '../theme.dart';
 import 'settings_detail_scaffold.dart';
 
-class SkillConfigScreen extends StatelessWidget {
+class SkillConfigScreen extends StatefulWidget {
   const SkillConfigScreen({super.key});
+
+  @override
+  State<SkillConfigScreen> createState() => _SkillConfigScreenState();
+}
+
+class _SkillConfigScreenState extends State<SkillConfigScreen> {
+  // Placeholder skill list — will be backed by a real skill registry later
+  final _skills = <_Skill>[
+    _Skill('天气查询', '获取实时天气和预报', Icons.wb_sunny_outlined, true),
+    _Skill('翻译助手', '多语言实时翻译', Icons.translate, true),
+    _Skill('笔记速记', '语音转文字自动记录', Icons.edit_note, false),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -17,16 +29,58 @@ class SkillConfigScreen extends StatelessWidget {
       const SettingItem(icon: Icons.code, label: '编写自定义技能', value: '创建你自己的 Skill'),
       const SizedBox(height: 24),
       _section('已安装技能'),
-      const SettingItem(icon: Icons.wb_sunny_outlined, label: '天气查询', value: '获取实时天气和预报', showChevron: false),
-      const SizedBox(height: 8),
-      const SettingItem(icon: Icons.translate, label: '翻译助手', value: '多语言实时翻译', showChevron: false),
-      const SizedBox(height: 8),
-      const SettingItem(icon: Icons.edit_note, label: '笔记速记', value: '语音转文字自动记录', showChevron: false),
+      ..._skills.map((s) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: PAColors.bgSecondary,
+                borderRadius: BorderRadius.circular(PARadius.md),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      gradient: s.enabled ? PAColors.gradientAccent : null,
+                      color: s.enabled ? null : PAColors.bgTertiary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(s.icon, size: 18, color: s.enabled ? Colors.white : PAColors.textMuted),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(s.name, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: s.enabled ? PAColors.textPrimary : PAColors.textMuted)),
+                        const SizedBox(height: 2),
+                        Text(s.desc, style: const TextStyle(fontSize: 12, color: PAColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: s.enabled,
+                    activeColor: PAColors.accent,
+                    onChanged: (v) => setState(() => s.enabled = v),
+                  ),
+                ],
+              ),
+            ),
+          )),
     ]);
   }
 
   Widget _section(String t) => Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: PAColors.textMuted, letterSpacing: 1)),
-  );
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: PAColors.textMuted, letterSpacing: 1)),
+      );
+}
+
+class _Skill {
+  final String name;
+  final String desc;
+  final IconData icon;
+  bool enabled;
+  _Skill(this.name, this.desc, this.icon, this.enabled);
 }
