@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'llm_provider.dart';
+import '../aws/event_stream_decoder.dart';
 
 /// Bedrock provider using Converse / ConverseStream API with Bearer Token auth.
 class BedrockProvider implements LlmProvider {
@@ -55,11 +55,7 @@ class BedrockProvider implements LlmProvider {
       headers: _headers(apiKey),
       body: jsonEncode(_buildBody(model: model, systemPrompt: systemPrompt, messages: messages, tools: tools)),
     );
-
-    if (resp.statusCode != 200) {
-      throw Exception('Bedrock ${resp.statusCode}: ${resp.body}');
-    }
-
+    if (resp.statusCode != 200) throw Exception('Bedrock ${resp.statusCode}: ${resp.body}');
     return _parseResponse(jsonDecode(resp.body));
   }
 
@@ -78,10 +74,10 @@ class BedrockProvider implements LlmProvider {
       Uri.parse('$baseUrl/model/$model/converse-stream'),
     )
       ..headers.addAll(_headers(apiKey))
-      ..body = jsonEncode(_buildBody(model: model, systemPrompt: systemPrompt, messages: messages, tools: tools));
+      ..body = jsonEncode(_buildBody(
+          model: model, systemPrompt: systemPrompt, messages: messages, tools: tools));
 
     final streamed = await http.Client().send(request);
-
     if (streamed.statusCode != 200) {
       final body = await streamed.stream.bytesToString();
       throw Exception('Bedrock ${streamed.statusCode}: $body');
@@ -94,55 +90,55 @@ class BedrockProvider implements LlmProvider {
     String? currentToolName;
     final currentToolInput = StringBuffer();
 
-    // Bedrock converseStream returns newline-delimited JSON events
-    await for (final chunk in streamed.stream
-        .transform(utf8.decoder)
-        .transform(const LineSplitter())) {
-      if (chunk.trim().isEmpty) continue;
+    await for (final msg in streamed.stream.transform(const EventStreamDecoder())) {
+      final eventType = msg.eventType;
+      if (eventType == null) continue;
 
-      final Map<String, dynamic> event;
+      final Map<String, dynamic> payload;
       try {
-        event = jsonDecode(chunk);
+        payload = jsonDecode(msg.payloadString);
       } catch (_) {
-        continue; // skip non-JSON lines (binary event-stream headers)
+        continue;
       }
 
-      // contentBlockStart
-      if (event.containsKey('contentBlockStart')) {
-        final start = event['contentBlockStart'];
-        final block = start['start'];
-        if (block != null && block.containsKey('toolUse')) {
-          currentToolId = block['toolUse']['toolUseId'];
-          currentToolName = block['toolUse']['name'];
-          currentToolInput.clear();
-        }
-      }
-
-      // contentBlockDelta
-      if (event.containsKey('contentBlockDelta')) {
-        final delta = event['contentBlockDelta']['delta'];
-        if (delta != null) {
-          if (delta.containsKey('text')) {
-            final text = delta['text'] as String;
-            fullContent.write(text);
-            onDelta(text);
-          } else if (delta.containsKey('toolUse')) {
-            currentToolInput.write(delta['toolUse']['input'] ?? '');
+      switch (eventType) {
+        case 'contentBlockStart':
+          final start = payload['start'];
+          if (start != null && start.containsKey('toolUse')) {
+            currentToolId = start['toolUse']['toolUseId'];
+            currentToolName = start['toolUse']['name'];
+            currentToolInput.clear();
           }
-        }
-      }
+          break;
 
-      // contentBlockStop
-      if (event.containsKey('contentBlockStop')) {
-        if (currentToolId != null) {
-          final input = currentToolInput.isEmpty
-              ? <String, dynamic>{}
-              : jsonDecode(currentToolInput.toString()) as Map<String, dynamic>;
-          toolCalls.add(ToolCall(id: currentToolId!, name: currentToolName!, arguments: input));
-          contentBlocks.add({'toolUse': {'toolUseId': currentToolId, 'name': currentToolName, 'input': input}});
-          currentToolId = null;
-          currentToolName = null;
-        }
+        case 'contentBlockDelta':
+          final delta = payload['delta'];
+          if (delta != null) {
+            if (delta.containsKey('text')) {
+              final text = delta['text'] as String;
+              fullContent.write(text);
+              onDelta(text);
+            } else if (delta.containsKey('toolUse')) {
+              currentToolInput.write(delta['toolUse']['input'] ?? '');
+            }
+          }
+          break;
+
+        case 'contentBlockStop':
+          if (currentToolId != null) {
+            final input = currentToolInput.isEmpty
+                ? <String, dynamic>{}
+                : jsonDecode(currentToolInput.toString()) as Map<String, dynamic>;
+            toolCalls.add(ToolCall(id: currentToolId!, name: currentToolName!, arguments: input));
+            contentBlocks.add({'toolUse': {'toolUseId': currentToolId, 'name': currentToolName, 'input': input}});
+            currentToolId = null;
+            currentToolName = null;
+          }
+          break;
+
+        case 'messageStop':
+          // Stream complete
+          break;
       }
     }
 
@@ -158,11 +154,9 @@ class BedrockProvider implements LlmProvider {
   }
 
   LlmResponse _parseResponse(Map<String, dynamic> data) {
-    final output = data['output']['message'];
-    final contentBlocks = output['content'] as List;
+    final contentBlocks = data['output']['message']['content'] as List;
     String? textContent;
     final toolCalls = <ToolCall>[];
-
     for (final block in contentBlocks) {
       if (block.containsKey('text')) {
         textContent = (textContent ?? '') + block['text'];
@@ -171,21 +165,13 @@ class BedrockProvider implements LlmProvider {
         toolCalls.add(ToolCall(id: tu['toolUseId'], name: tu['name'], arguments: Map<String, dynamic>.from(tu['input'])));
       }
     }
-
-    return LlmResponse(
-      content: textContent,
-      toolCalls: toolCalls,
-      rawAssistantMessage: {'role': 'assistant', 'content': contentBlocks},
-    );
+    return LlmResponse(content: textContent, toolCalls: toolCalls, rawAssistantMessage: {'role': 'assistant', 'content': contentBlocks});
   }
 
   Map<String, dynamic>? _convertMessage(Map<String, dynamic> msg) {
     final role = msg['role'];
     if (role == 'tool') {
-      return {
-        'role': 'user',
-        'content': [{'toolResult': {'toolUseId': msg['tool_call_id'], 'content': [{'text': msg['content']}]}}],
-      };
+      return {'role': 'user', 'content': [{'toolResult': {'toolUseId': msg['tool_call_id'], 'content': [{'text': msg['content']}]}}]};
     }
     if (role == 'assistant' && msg['content'] is List) return msg;
     final content = msg['content'];
@@ -194,8 +180,6 @@ class BedrockProvider implements LlmProvider {
   }
 
   @override
-  Map<String, dynamic> buildToolResultMessage({required ToolCall toolCall, required String result}) => {
-        'role': 'user',
-        'content': [{'toolResult': {'toolUseId': toolCall.id, 'content': [{'text': result}]}}],
-      };
+  Map<String, dynamic> buildToolResultMessage({required ToolCall toolCall, required String result}) =>
+      {'role': 'user', 'content': [{'toolResult': {'toolUseId': toolCall.id, 'content': [{'text': result}]}}]};
 }
