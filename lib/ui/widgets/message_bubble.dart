@@ -28,11 +28,12 @@ class MessageBubble extends StatelessWidget {
           border: isUser ? null : Border.all(color: PAColors.border),
         ),
         child: message.role == MessageRole.tool
-            ? Text(
+            ? SelectableText(
                 '🔧 ${message.toolName}: ${message.content}',
                 style: const TextStyle(fontSize: 12, color: PAColors.textMuted),
               )
             : MarkdownBody(
+                selectable: true,
                 data: message.content,
                 styleSheet: MarkdownStyleSheet(
                   p: TextStyle(
