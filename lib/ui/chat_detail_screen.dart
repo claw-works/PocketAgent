@@ -3,12 +3,13 @@ import 'package:uuid/uuid.dart';
 import '../models/message.dart';
 import '../services/llm_service.dart';
 import '../services/tool_registry.dart';
+import '../services/chat_store.dart';
 import 'theme.dart';
 import 'widgets/message_bubble.dart';
 
 class ChatDetailScreen extends StatefulWidget {
-  final String? topicTitle;
-  const ChatDetailScreen({super.key, this.topicTitle});
+  final String? topicId;
+  const ChatDetailScreen({super.key, this.topicId});
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -18,17 +19,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _inputCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   final _uuid = const Uuid();
-  final _messages = <Message>[];
   late final ToolRegistry _tools;
   late final LlmService _llm;
+  late ChatTopic _topic;
   bool _loading = false;
-  bool _voiceOn = true;
 
   @override
   void initState() {
     super.initState();
     _tools = ToolRegistry();
     _llm = LlmService(tools: _tools);
+
+    if (widget.topicId != null) {
+      _topic = ChatStore.instance.topics.firstWhere((t) => t.id == widget.topicId!);
+    } else {
+      _topic = ChatStore.instance.create();
+    }
   }
 
   void _scrollToBottom() {
@@ -45,16 +51,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _loading) return;
     _inputCtrl.clear();
-    setState(() {
-      _messages.add(Message(id: _uuid.v4(), role: MessageRole.user, content: text));
-      _loading = true;
-    });
+
+    final userMsg = Message(id: _uuid.v4(), role: MessageRole.user, content: text);
+    await ChatStore.instance.addMessage(_topic.id, userMsg);
+    setState(() => _loading = true);
     _scrollToBottom();
-    final reply = await _llm.chat(_messages);
-    setState(() {
-      _messages.add(Message(id: _uuid.v4(), role: MessageRole.assistant, content: reply));
-      _loading = false;
-    });
+
+    final reply = await _llm.chat(_topic.messages);
+
+    final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: reply);
+    await ChatStore.instance.addMessage(_topic.id, assistantMsg);
+    setState(() => _loading = false);
     _scrollToBottom();
   }
 
@@ -85,29 +92,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(widget.topicTitle ?? '新对话',
+            child: Text(_topic.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 18, fontWeight: FontWeight.w700, color: PAColors.textPrimary)),
-          ),
-          GestureDetector(
-            onTap: () => setState(() => _voiceOn = !_voiceOn),
-            child: Row(
-              children: [
-                const Icon(Icons.volume_up, size: 20, color: PAColors.accent),
-                const SizedBox(width: 4),
-                const Text('语音',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: PAColors.accent)),
-                const SizedBox(width: 4),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _voiceOn ? PAColors.success : PAColors.textMuted,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
@@ -115,7 +104,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _messageList() {
-    if (_messages.isEmpty) {
+    if (_topic.messages.isEmpty) {
       return const Center(
         child: Text('👋 说点什么吧', style: TextStyle(fontSize: 18, color: PAColors.textSecondary)),
       );
@@ -123,8 +112,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return ListView.builder(
       controller: _scrollCtrl,
       padding: const EdgeInsets.all(16),
-      itemCount: _messages.length,
-      itemBuilder: (_, i) => MessageBubble(message: _messages[i]),
+      itemCount: _topic.messages.length,
+      itemBuilder: (_, i) => MessageBubble(message: _topic.messages[i]),
     );
   }
 
@@ -134,7 +123,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: PAColors.accent)),
           SizedBox(width: 8),
           Text('思考中...', style: TextStyle(color: PAColors.textSecondary)),
         ],
@@ -171,7 +160,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _send(),
                 style: const TextStyle(fontSize: 15, color: PAColors.textPrimary),
-                decoration: const InputDecoration.collapsed(hintText: '跟 AI 说话...', hintStyle: TextStyle(color: PAColors.textMuted)),
+                decoration: const InputDecoration.collapsed(
+                    hintText: '跟 AI 说话...',
+                    hintStyle: TextStyle(color: PAColors.textMuted)),
               ),
             ),
           ),

@@ -1,30 +1,59 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
+import '../services/activity_log.dart';
 
-class ActivityScreen extends StatelessWidget {
+class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
 
   @override
+  State<ActivityScreen> createState() => _ActivityScreenState();
+}
+
+class _ActivityScreenState extends State<ActivityScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ActivityLog.instance.addListener(_refresh);
+  }
+
+  void _refresh() => setState(() {});
+
+  @override
+  void dispose() {
+    ActivityLog.instance.removeListener(_refresh);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final entries = ActivityLog.instance.entries;
     return SafeArea(
       child: Column(
         children: [
           _header(),
           Expanded(
-              child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            children: [
-              _sectionLabel('今天'),
-              _item('设置提醒', '已添加提醒：下午 3:00 开会 ⏰', '14:32', true),
-              _item('查询天气', '获取北京实时天气：晴 18-26°C 🌤️', '14:30', true),
-              _item('复制到剪贴板', '翻译结果已复制到剪贴板 📋', '13:45', true),
-              _item('拍照', '调用相机拍摄照片并识别植物 📷', '12:10', true),
-              const SizedBox(height: 12),
-              _sectionLabel('昨天'),
-              _item('写入日历', '添加 3 个日程到系统日历 📅', '22:15', true),
-              _item('执行 Termux 脚本', '运行 Python 脚本，输出已保存 💾', '20:30', false),
-            ],
-          )),
+            child: entries.isEmpty
+                ? const Center(
+                    child: Text('暂无操作记录',
+                        style: TextStyle(fontSize: 15, color: PAColors.textSecondary)))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    itemCount: entries.length,
+                    itemBuilder: (_, i) {
+                      final e = entries[i];
+                      // Group by date
+                      final showDate = i == 0 ||
+                          !_sameDay(entries[i - 1].time, e.time);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (showDate) _dateLabel(e.time),
+                          _item(e),
+                        ],
+                      );
+                    },
+                  ),
+          ),
         ],
       ),
     );
@@ -32,67 +61,87 @@ class ActivityScreen extends StatelessWidget {
 
   Widget _header() => const Padding(
         padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('操作记录',
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: PAColors.textPrimary)),
-            Icon(Icons.tune, size: 22, color: PAColors.textSecondary),
-          ],
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text('操作记录',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: PAColors.textPrimary)),
         ),
       );
 
-  static Widget _sectionLabel(String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(t,
-            style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: PAColors.textMuted,
-                letterSpacing: 1)),
-      );
+  Widget _dateLabel(DateTime dt) {
+    final now = DateTime.now();
+    String label;
+    if (_sameDay(now, dt)) {
+      label = '今天';
+    } else if (_sameDay(now.subtract(const Duration(days: 1)), dt)) {
+      label = '昨天';
+    } else {
+      label = '${dt.month}/${dt.day}';
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      child: Text(label,
+          style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: PAColors.textMuted,
+              letterSpacing: 1)),
+    );
+  }
 
-  static Widget _item(String action, String detail, String time, bool ok) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-              width: 10,
-              height: 10,
-              margin: const EdgeInsets.only(top: 4),
-              decoration: BoxDecoration(
-                  color: ok ? PAColors.success : PAColors.accent,
-                  shape: BoxShape.circle)),
-          const SizedBox(width: 12),
-          Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _item(ActivityEntry e) {
+    final time =
+        '${e.time.hour.toString().padLeft(2, '0')}:${e.time.minute.toString().padLeft(2, '0')}';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+            width: 10,
+            height: 10,
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+                color: e.success ? PAColors.success : PAColors.accent,
+                shape: BoxShape.circle)),
+        const SizedBox(width: 12),
+        Expanded(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(action,
+                    Expanded(
+                      child: Text(e.action,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: PAColors.textPrimary)),
-                      Text(time,
-                          style: const TextStyle(
-                              fontSize: 12, color: PAColors.textMuted)),
-                    ]),
-                const SizedBox(height: 4),
-                Text(detail,
-                    style: const TextStyle(
-                        fontSize: 13, color: PAColors.textSecondary)),
-                const SizedBox(height: 4),
-                Text(ok ? '✅ 成功' : '⚠️ 超时重试后成功',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: ok ? PAColors.success : PAColors.accent)),
-              ])),
-        ]),
-      );
+                    ),
+                    Text(time,
+                        style: const TextStyle(
+                            fontSize: 12, color: PAColors.textMuted)),
+                  ]),
+              const SizedBox(height: 4),
+              Text(e.detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13, color: PAColors.textSecondary)),
+              const SizedBox(height: 4),
+              Text(e.success ? '✅ 成功' : '❌ 失败',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: e.success ? PAColors.success : PAColors.accent)),
+            ])),
+      ]),
+    );
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }
