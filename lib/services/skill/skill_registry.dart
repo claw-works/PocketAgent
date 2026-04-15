@@ -63,6 +63,8 @@ class SkillRegistry {
     final dir = Directory(dirPath);
     await dir.create(recursive: true);
 
+    _skills.clear();
+
     await for (final entity in dir.list()) {
       if (entity is Directory) {
         await _loadSkillFromDir(entity);
