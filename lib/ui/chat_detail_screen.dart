@@ -266,8 +266,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 onKeyEvent: (event) {
                   if (event is KeyDownEvent &&
                       event.logicalKey == LogicalKeyboardKey.enter &&
-                      !HardwareKeyboard.instance.isShiftPressed) {
-                    // Prevent the newline from being inserted
+                      !HardwareKeyboard.instance.isShiftPressed &&
+                      !_inputCtrl.value.composing.isValid) {
                     WidgetsBinding.instance.addPostFrameCallback((_) => _send());
                   }
                 },
