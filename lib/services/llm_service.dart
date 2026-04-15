@@ -29,7 +29,6 @@ class LlmService {
   Future<void> setModel(String v) => _config.setModel(_config.activeProvider, v);
   Future<void> setProvider(String v) => _config.setActiveProvider(v);
 
-  // --- Provider resolution ---
   static const _defaultBaseUrls = {
     LlmProviderType.openai: 'https://api.openai.com',
     LlmProviderType.anthropic: 'https://api.anthropic.com',
@@ -62,12 +61,10 @@ class LlmService {
     }
   }
 
-  /// Non-streaming chat.
   Future<String> chat(List<Message> history) async {
     return streamChat(history, onDelta: (_) {});
   }
 
-  /// Streaming chat.
   Future<String> streamChat(
     List<Message> history, {
     required void Function(String delta) onDelta,
@@ -90,8 +87,6 @@ class LlmService {
       final LlmResponse resp;
       final isFirstRound = i == 0;
       try {
-        // Only stream the first round (user-facing). Tool result rounds use non-stream
-        // for stability (some providers reject stream requests with tool results).
         if (isFirstRound) {
           resp = await provider.stream(
             apiKey: key,
@@ -137,8 +132,6 @@ class LlmService {
         messages.add(provider.buildToolResultMessage(toolCall: tc, result: result));
       }
       onStatus?.call('🤔 正在思考...');
-        messages.add(provider.buildToolResultMessage(toolCall: tc, result: result));
-      }
     }
 
     return '⚠️ 工具调用轮次过多（$maxToolRounds），已中止';
