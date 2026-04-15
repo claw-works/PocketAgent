@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import '../tools/base_tool.dart';
 import '../tools/device_info_tool.dart';
 import '../tools/clipboard_tool.dart';
@@ -10,6 +11,7 @@ import '../tools/speech_tool.dart';
 import '../tools/termux_tool.dart';
 import '../tools/shortcuts_tool.dart';
 import '../tools/screen_control_tool.dart';
+import '../tools/macos_tool.dart';
 import 'activity_log.dart';
 
 class ToolRegistry {
@@ -17,6 +19,7 @@ class ToolRegistry {
   final Set<String> _disabled = {};
 
   ToolRegistry() {
+    // 通用
     register(DeviceInfoTool());
     register(ClipboardTool());
     register(CameraTool());
@@ -28,6 +31,8 @@ class ToolRegistry {
     register(TermuxTool());
     register(ShortcutsTool());
     register(ScreenControlTool());
+    // 平台专属
+    if (Platform.isMacOS) register(MacOsTool());
   }
 
   void register(BaseTool tool) => _tools[tool.name] = tool;

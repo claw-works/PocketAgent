@@ -25,6 +25,7 @@ class _ToolsConfigScreenState extends State<ToolsConfigScreen> {
     'termux_shell': Icons.terminal,
     'ios_shortcuts': Icons.flash_on,
     'screen_control': Icons.touch_app_outlined,
+    'macos_shell': Icons.desktop_mac_outlined,
   };
 
   static const _toolLabels = <String, String>{
@@ -39,6 +40,7 @@ class _ToolsConfigScreenState extends State<ToolsConfigScreen> {
     'termux_shell': 'Termux 互操作',
     'ios_shortcuts': 'iOS 快捷指令',
     'screen_control': '屏幕操控',
+    'macos_shell': 'macOS Shell / 打开应用',
   };
 
   @override
