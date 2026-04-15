@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'llm_provider.dart';
 import '../aws/event_stream_decoder.dart';
@@ -34,7 +35,6 @@ class BedrockProvider implements LlmProvider {
     }
 
     return {
-      'modelId': model,
       'system': [{'text': systemPrompt}],
       'messages': bedrockMessages,
       if (bedrockTools.isNotEmpty) 'toolConfig': {'tools': bedrockTools},
@@ -55,7 +55,10 @@ class BedrockProvider implements LlmProvider {
       headers: _headers(apiKey),
       body: jsonEncode(_buildBody(model: model, systemPrompt: systemPrompt, messages: messages, tools: tools)),
     );
-    if (resp.statusCode != 200) throw Exception('Bedrock ${resp.statusCode}: ${resp.body}');
+    if (resp.statusCode != 200) {
+      debugPrint('[Bedrock] ❌ converse ${resp.statusCode}: ${resp.body}');
+      throw Exception('Bedrock ${resp.statusCode}: ${resp.body}');
+    }
     return _parseResponse(jsonDecode(resp.body));
   }
 
@@ -78,10 +81,16 @@ class BedrockProvider implements LlmProvider {
           model: model, systemPrompt: systemPrompt, messages: messages, tools: tools));
 
     final streamed = await http.Client().send(request);
+
+    // For non-200, read the full body (may be in stream or empty)
     if (streamed.statusCode != 200) {
       final body = await streamed.stream.bytesToString();
-      throw Exception('Bedrock ${streamed.statusCode}: $body');
+      debugPrint('[Bedrock] ❌ ${streamed.statusCode}: $body');
+      debugPrint('[Bedrock] Request URL: $baseUrl/model/$model/converse-stream');
+      throw Exception('Bedrock ${streamed.statusCode}: ${body.isEmpty ? "Empty response body" : body}');
     }
+
+    debugPrint('[Bedrock] ✅ Stream connected');
 
     final fullContent = StringBuffer();
     final contentBlocks = <Map<String, dynamic>>[];

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../models/message.dart';
 import 'tool_registry.dart';
 import 'agent_config.dart';
@@ -81,6 +82,8 @@ class LlmService {
     final modelName = model ?? _defaultModels[type]!;
     final systemPrompt = AgentConfig.instance.systemPrompt;
 
+    debugPrint('[LLM] provider=$type model=$modelName base=$base');
+
     final messages = history.map((m) => m.toOpenAI()).toList();
 
     for (var i = 0; i < maxToolRounds; i++) {
@@ -95,9 +98,13 @@ class LlmService {
           tools: tools.toOpenAI(),
           onDelta: onDelta,
         );
-      } catch (e) {
+      } catch (e, st) {
+        debugPrint('[LLM] ❌ Error: $e');
+        debugPrint('[LLM] StackTrace: $st');
         return '❌ 请求失败: $e';
       }
+
+      debugPrint('[LLM] Response: hasToolCalls=${resp.hasToolCalls}, content=${resp.content?.length ?? 0} chars');
 
       if (!resp.hasToolCalls) {
         return resp.content ?? '';
