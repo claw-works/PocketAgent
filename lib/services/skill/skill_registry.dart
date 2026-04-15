@@ -26,16 +26,18 @@ class SkillRegistry {
   Future<void> load() async {
     final dirPath = await skillsDir;
     final dir = Directory(dirPath);
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-      await _installBuiltins();
-    }
+    await dir.create(recursive: true);
 
-    // Scan all subdirectories for skill.yaml / skill.json
+    // Scan all subdirectories for skill.json
     await for (final entity in dir.list()) {
       if (entity is Directory) {
         await _loadSkillFromDir(entity);
       }
+    }
+
+    // Install builtins if no skills found
+    if (_skills.isEmpty) {
+      await _installBuiltins();
     }
 
     debugPrint('[Skills] Loaded ${_skills.length} skills: ${_skills.keys.join(', ')}');
