@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'ui/chat_screen.dart';
+import 'ui/theme.dart';
+import 'ui/main_shell.dart';
 
 class PocketAgentApp extends StatelessWidget {
   const PocketAgentApp({super.key});
@@ -9,12 +10,8 @@ class PocketAgentApp extends StatelessWidget {
     return MaterialApp(
       title: 'PocketAgent',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.deepOrange,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
-      home: const ChatScreen(),
+      theme: paTheme(),
+      home: const MainShell(),
     );
   }
 }
