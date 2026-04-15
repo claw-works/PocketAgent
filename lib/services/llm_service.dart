@@ -72,6 +72,7 @@ class LlmService {
   Future<String> streamChat(
     List<Message> history, {
     required void Function(String delta) onDelta,
+    void Function(String status)? onStatus,
   }) async {
     final key = apiKey;
     if (key == null || key.isEmpty) return '⚠️ 请先在设置中配置 API Key';
@@ -121,8 +122,8 @@ class LlmService {
       debugPrint('[LLM] Round $i: hasToolCalls=${resp.hasToolCalls}, content=${resp.content?.length ?? 0} chars');
 
       if (!resp.hasToolCalls) {
-        // If this is a follow-up round after tool execution, stream the final text
         if (!isFirstRound && resp.content != null) {
+          onStatus?.call('');
           onDelta(resp.content!);
         }
         return resp.content ?? '';
@@ -131,7 +132,12 @@ class LlmService {
       messages.add(resp.rawAssistantMessage);
       for (final tc in resp.toolCalls) {
         debugPrint('[LLM] Tool call: ${tc.name}(${tc.arguments})');
+        onStatus?.call('🔧 正在执行: ${tc.name}');
         final result = await tools.call(tc.name, tc.arguments);
+        debugPrint('[LLM] Tool result: ${result.length} chars');
+        messages.add(provider.buildToolResultMessage(toolCall: tc, result: result));
+      }
+      onStatus?.call('🤔 正在思考...');
         messages.add(provider.buildToolResultMessage(toolCall: tc, result: result));
       }
     }

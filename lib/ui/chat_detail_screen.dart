@@ -23,8 +23,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   late final LlmService _llm;
   late ChatTopic _topic;
   bool _loading = false;
-  // For streaming: the in-progress assistant message
   String _streamingContent = '';
+  String _statusText = '';
 
   @override
   void initState() {
@@ -59,6 +59,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     setState(() {
       _loading = true;
       _streamingContent = '';
+      _statusText = '';
     });
     _scrollToBottom();
 
@@ -67,8 +68,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       onDelta: (delta) {
         setState(() {
           _streamingContent += delta;
+          _statusText = '';
         });
         _scrollToBottom();
+      },
+      onStatus: (status) {
+        setState(() => _statusText = status);
       },
     );
 
@@ -126,7 +131,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   Widget _messageList() {
     final msgCount = _topic.messages.length;
     final hasStreaming = _loading && _streamingContent.isNotEmpty;
-    final totalCount = msgCount + (hasStreaming ? 1 : 0) + (_loading && _streamingContent.isEmpty ? 1 : 0);
+    final hasStatus = _loading && _statusText.isNotEmpty;
+    final showSpinner = _loading && _streamingContent.isEmpty && _statusText.isEmpty;
+    final extraItems = (hasStreaming ? 1 : 0) + (hasStatus ? 1 : 0) + (showSpinner ? 1 : 0);
+    final totalCount = msgCount + extraItems;
 
     if (msgCount == 0 && !_loading) {
       return const Center(
@@ -142,8 +150,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         if (i < msgCount) {
           return MessageBubble(message: _topic.messages[i]);
         }
+        final extra = i - msgCount;
         // Streaming bubble
-        if (hasStreaming && i == msgCount) {
+        if (hasStreaming && extra == 0) {
           return MessageBubble(
             message: Message(
               id: 'streaming',
@@ -152,7 +161,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
           );
         }
-        // Loading indicator (before any streaming content arrives)
+        // Status indicator (tool executing / thinking)
+        if (hasStatus) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            child: Row(
+              children: [
+                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: PAColors.accentCyan)),
+                const SizedBox(width: 8),
+                Text(_statusText, style: const TextStyle(fontSize: 13, color: PAColors.accentCyan)),
+              ],
+            ),
+          );
+        }
+        // Initial loading spinner
         return const Padding(
           padding: EdgeInsets.all(8),
           child: Row(
