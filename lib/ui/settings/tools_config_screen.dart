@@ -26,6 +26,7 @@ class _ToolsConfigScreenState extends State<ToolsConfigScreen> {
     'ios_shortcuts': Icons.flash_on,
     'screen_control': Icons.touch_app_outlined,
     'macos_shell': Icons.desktop_mac_outlined,
+    'browser': Icons.public_outlined,
   };
 
   static const _toolLabels = <String, String>{
@@ -41,6 +42,7 @@ class _ToolsConfigScreenState extends State<ToolsConfigScreen> {
     'ios_shortcuts': 'iOS 快捷指令',
     'screen_control': '屏幕操控',
     'macos_shell': 'macOS Shell / 打开应用',
+    'browser': '浏览器操控 (CDP)',
   };
 
   @override
