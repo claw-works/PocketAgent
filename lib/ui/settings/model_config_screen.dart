@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'settings_detail_scaffold.dart';
-import '../../services/llm_service.dart';
-import '../../services/tool_registry.dart';
+import '../../services/llm_config_store.dart';
 
 class ModelConfigScreen extends StatefulWidget {
   const ModelConfigScreen({super.key});
@@ -12,8 +11,8 @@ class ModelConfigScreen extends StatefulWidget {
 }
 
 class _ModelConfigScreenState extends State<ModelConfigScreen> {
-  late final LlmService _llm;
-  String _provider = 'openai';
+  final _config = LlmConfigStore.instance;
+  late String _provider;
   final _keyCtrl = TextEditingController();
   final _urlCtrl = TextEditingController();
   final _modelCtrl = TextEditingController();
@@ -29,21 +28,38 @@ class _ModelConfigScreenState extends State<ModelConfigScreen> {
   @override
   void initState() {
     super.initState();
-    _llm = LlmService(tools: ToolRegistry());
-    _provider = _llm.providerName ?? 'openai';
-    _keyCtrl.text = _llm.apiKey ?? '';
-    _urlCtrl.text = _llm.baseUrl ?? '';
-    _modelCtrl.text = _llm.model ?? '';
+    _provider = _config.activeProvider;
+    _loadProvider(_provider);
+  }
+
+  void _loadProvider(String provider) {
+    _keyCtrl.text = _config.apiKeyFor(provider) ?? '';
+    _urlCtrl.text = _config.baseUrlFor(provider) ?? '';
+    _modelCtrl.text = _config.modelFor(provider) ?? '';
+  }
+
+  void _switchProvider(String provider) {
+    // Save current before switching
+    _saveCurrentSilently();
+    setState(() {
+      _provider = provider;
+      _loadProvider(provider);
+    });
+  }
+
+  Future<void> _saveCurrentSilently() async {
+    final key = _keyCtrl.text.trim();
+    final url = _urlCtrl.text.trim();
+    final model = _modelCtrl.text.trim();
+    if (key.isNotEmpty) await _config.setApiKey(_provider, key);
+    if (url.isNotEmpty) await _config.setBaseUrl(_provider, url);
+    if (model.isNotEmpty) await _config.setModel(_provider, model);
   }
 
   Future<void> _save() async {
     try {
-      await _llm.setProvider(_provider);
-      await _llm.setApiKey(_keyCtrl.text.trim());
-      final url = _urlCtrl.text.trim();
-      if (url.isNotEmpty) await _llm.setBaseUrl(url);
-      final model = _modelCtrl.text.trim();
-      if (model.isNotEmpty) await _llm.setModel(model);
+      await _saveCurrentSilently();
+      await _config.setActiveProvider(_provider);
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('✅ 已保存')));
@@ -63,7 +79,7 @@ class _ModelConfigScreenState extends State<ModelConfigScreen> {
       const SizedBox(height: 8),
       _providerSelector(),
       const SizedBox(height: 20),
-      _section('连接配置'),
+      _section('${_providerLabels[_provider]} 配置'),
       const SizedBox(height: 8),
       _field(_urlCtrl, 'API Base URL', '留空使用默认值'),
       const SizedBox(height: 8),
@@ -100,8 +116,9 @@ class _ModelConfigScreenState extends State<ModelConfigScreen> {
       runSpacing: 8,
       children: _providers.map((p) {
         final active = _provider == p;
+        final hasKey = (_config.apiKeyFor(p) ?? '').isNotEmpty;
         return GestureDetector(
-          onTap: () => setState(() => _provider = p),
+          onTap: () => _switchProvider(p),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
@@ -110,8 +127,19 @@ class _ModelConfigScreenState extends State<ModelConfigScreen> {
               borderRadius: BorderRadius.circular(PARadius.pill),
               border: active ? null : Border.all(color: PAColors.border),
             ),
-            child: Text(_providerLabels[p]!,
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: active ? Colors.white : PAColors.textSecondary)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_providerLabels[p]!,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                        color: active ? Colors.white : PAColors.textSecondary)),
+                if (hasKey && !active) ...[
+                  const SizedBox(width: 4),
+                  Container(width: 6, height: 6,
+                      decoration: const BoxDecoration(color: PAColors.success, shape: BoxShape.circle)),
+                ],
+              ],
+            ),
           ),
         );
       }).toList(),

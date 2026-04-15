@@ -19,16 +19,15 @@ class LlmService {
 
   LlmConfigStore get _config => LlmConfigStore.instance;
 
-  // --- Delegated accessors for settings UI ---
   String? get apiKey => _config.apiKey;
   String? get baseUrl => _config.baseUrl;
   String? get model => _config.model;
-  String? get providerName => _config.provider;
+  String? get providerName => _config.activeProvider;
 
-  Future<void> setApiKey(String v) => _config.setApiKey(v);
-  Future<void> setBaseUrl(String v) => _config.setBaseUrl(v);
-  Future<void> setModel(String v) => _config.setModel(v);
-  Future<void> setProvider(String v) => _config.setProvider(v);
+  Future<void> setApiKey(String v) => _config.setApiKey(_config.activeProvider, v);
+  Future<void> setBaseUrl(String v) => _config.setBaseUrl(_config.activeProvider, v);
+  Future<void> setModel(String v) => _config.setModel(_config.activeProvider, v);
+  Future<void> setProvider(String v) => _config.setActiveProvider(v);
 
   // --- Provider resolution ---
   static const _defaultBaseUrls = {
