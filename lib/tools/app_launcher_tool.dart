@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
+import 'dart:io';
 import 'base_tool.dart';
 import '../services/platform/android_intent_bridge.dart';
 
@@ -30,24 +30,43 @@ class AppLauncherTool extends BaseTool {
   Future<String> execute(Map<String, dynamic> args) async {
     final action = args['action'] as String;
 
-    if (!Platform.isAndroid) {
-      // iOS fallback: url_launcher (TODO)
-      return jsonEncode({'status': 'ok', 'message': '已打开（非 Android，使用 url_launcher stub）'});
-    }
-
     try {
-      if (action == 'share_text') {
-        await AndroidIntentBridge.shareText(args['text'] as String? ?? '');
-        return jsonEncode({'status': 'ok', 'message': '已打开分享面板'});
+      if (Platform.isAndroid) {
+        return await _android(action, args);
       }
-      final url = args['url'] as String? ?? '';
-      final result = await AndroidIntentBridge.launch(
-        action: 'android.intent.action.VIEW',
-        uri: url,
-      );
-      return jsonEncode({'status': 'ok', ...result});
+      if (Platform.isMacOS) {
+        return await _macos(action, args);
+      }
+      // iOS / others: stub
+      return jsonEncode({'status': 'ok', 'message': '已打开（stub）'});
     } catch (e) {
       return jsonEncode({'status': 'error', 'message': '$e'});
     }
+  }
+
+  Future<String> _android(String action, Map<String, dynamic> args) async {
+    if (action == 'share_text') {
+      await AndroidIntentBridge.shareText(args['text'] as String? ?? '');
+      return jsonEncode({'status': 'ok', 'message': '已打开分享面板'});
+    }
+    final url = args['url'] as String? ?? '';
+    final result = await AndroidIntentBridge.launch(
+      action: 'android.intent.action.VIEW',
+      uri: url,
+    );
+    return jsonEncode({'status': 'ok', ...result});
+  }
+
+  Future<String> _macos(String action, Map<String, dynamic> args) async {
+    if (action == 'open_url') {
+      final url = args['url'] as String? ?? '';
+      final result = await Process.run('open', [url]);
+      return jsonEncode({
+        'status': result.exitCode == 0 ? 'ok' : 'error',
+        'message': result.exitCode == 0 ? '已打开 $url' : (result.stderr as String).trim(),
+      });
+    }
+    // macOS share: use AppleScript or just copy
+    return jsonEncode({'status': 'ok', 'message': 'macOS 暂不支持分享'});
   }
 }
