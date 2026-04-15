@@ -14,7 +14,7 @@ class SkillRegistry {
   final _cdp = CdpClient();
 
   static String get _baseDir {
-    final home = Platform.environment['HOME'] ?? '';
+    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
     return '$home/.pocketagent';
   }
 

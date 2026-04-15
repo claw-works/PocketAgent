@@ -26,6 +26,7 @@ class _ToolsConfigScreenState extends State<ToolsConfigScreen> {
     'ios_shortcuts': Icons.flash_on,
     'screen_control': Icons.touch_app_outlined,
     'macos_shell': Icons.desktop_mac_outlined,
+    'windows_shell': Icons.desktop_windows_outlined,
     'browser': Icons.public_outlined,
   };
 
@@ -42,6 +43,7 @@ class _ToolsConfigScreenState extends State<ToolsConfigScreen> {
     'ios_shortcuts': 'iOS 快捷指令',
     'screen_control': '屏幕操控',
     'macos_shell': 'macOS Shell / 打开应用',
+    'windows_shell': 'Windows Shell / PowerShell',
     'browser': '浏览器操控 (CDP)',
   };
 

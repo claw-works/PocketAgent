@@ -37,6 +37,9 @@ class AppLauncherTool extends BaseTool {
       if (Platform.isMacOS) {
         return await _macos(action, args);
       }
+      if (Platform.isWindows) {
+        return await _windows(action, args);
+      }
       // iOS / others: stub
       return jsonEncode({'status': 'ok', 'message': '已打开（stub）'});
     } catch (e) {
@@ -68,5 +71,17 @@ class AppLauncherTool extends BaseTool {
     }
     // macOS share: use AppleScript or just copy
     return jsonEncode({'status': 'ok', 'message': 'macOS 暂不支持分享'});
+  }
+
+  Future<String> _windows(String action, Map<String, dynamic> args) async {
+    if (action == 'open_url') {
+      final url = args['url'] as String? ?? '';
+      final result = await Process.run('cmd', ['/c', 'start', '', url]);
+      return jsonEncode({
+        'status': result.exitCode == 0 ? 'ok' : 'error',
+        'message': result.exitCode == 0 ? '已打开 $url' : (result.stderr as String).trim(),
+      });
+    }
+    return jsonEncode({'status': 'ok', 'message': 'Windows 暂不支持分享'});
   }
 }

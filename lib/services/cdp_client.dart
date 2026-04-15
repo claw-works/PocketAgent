@@ -18,7 +18,7 @@ class CdpClient {
       final chromePath = await _findChrome();
       if (chromePath == null) throw Exception('Chrome not found');
 
-      final home = Platform.environment['HOME'] ?? '';
+      final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
       final profileDir = '$home/.pocketagent/chrome_profile';
       await Directory(profileDir).create(recursive: true);
 
@@ -69,6 +69,19 @@ class CdpClient {
       ];
       for (final p in paths) {
         if (await File(p).exists()) return p;
+      }
+    } else if (Platform.isWindows) {
+      final envPaths = [
+        Platform.environment['PROGRAMFILES'],
+        Platform.environment['PROGRAMFILES(X86)'],
+        Platform.environment['LOCALAPPDATA'],
+      ];
+      for (final base in envPaths) {
+        if (base == null) continue;
+        for (final sub in ['Google/Chrome/Application/chrome.exe', 'Google\\Chrome\\Application\\chrome.exe']) {
+          final p = '$base/$sub';
+          if (await File(p).exists()) return p;
+        }
       }
     } else if (Platform.isLinux) {
       for (final name in ['google-chrome', 'chromium-browser', 'chromium']) {
