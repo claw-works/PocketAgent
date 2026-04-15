@@ -1,12 +1,13 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'json_file_store.dart';
 
 /// Agent profile configuration — name, persona, voice, etc.
+/// Non-sensitive, uses file storage.
 class AgentConfig extends ChangeNotifier {
   static final AgentConfig instance = AgentConfig._();
   AgentConfig._();
 
-  final _storage = const FlutterSecureStorage();
+  final _store = JsonFileStore('agent_config.json');
 
   String _name = 'PocketAgent';
   String _persona = '友好、专业的 AI 助手';
@@ -28,48 +29,33 @@ class AgentConfig extends ChangeNotifier {
       '你可以通过工具直接操控这台设备。回答简洁。';
 
   Future<void> load() async {
-    _name = await _storage.read(key: 'agent_name') ?? _name;
-    _persona = await _storage.read(key: 'agent_persona') ?? _persona;
-    _voiceId = await _storage.read(key: 'agent_voice') ?? _voiceId;
-    final speed = await _storage.read(key: 'agent_voice_speed');
-    if (speed != null) _voiceSpeed = double.tryParse(speed) ?? _voiceSpeed;
-    _language = await _storage.read(key: 'ui_language') ?? _language;
-    _chatLanguage = await _storage.read(key: 'chat_language') ?? _chatLanguage;
+    final data = await _store.read();
+    if (data is Map<String, dynamic>) {
+      _name = data['name'] ?? _name;
+      _persona = data['persona'] ?? _persona;
+      _voiceId = data['voiceId'] ?? _voiceId;
+      _voiceSpeed = (data['voiceSpeed'] as num?)?.toDouble() ?? _voiceSpeed;
+      _language = data['language'] ?? _language;
+      _chatLanguage = data['chatLanguage'] ?? _chatLanguage;
+    }
   }
 
-  Future<void> setName(String v) async {
-    _name = v;
-    await _storage.write(key: 'agent_name', value: v);
+  Future<void> _save() async {
+    await _store.write({
+      'name': _name,
+      'persona': _persona,
+      'voiceId': _voiceId,
+      'voiceSpeed': _voiceSpeed,
+      'language': _language,
+      'chatLanguage': _chatLanguage,
+    });
     notifyListeners();
   }
 
-  Future<void> setPersona(String v) async {
-    _persona = v;
-    await _storage.write(key: 'agent_persona', value: v);
-    notifyListeners();
-  }
-
-  Future<void> setVoiceId(String v) async {
-    _voiceId = v;
-    await _storage.write(key: 'agent_voice', value: v);
-    notifyListeners();
-  }
-
-  Future<void> setVoiceSpeed(double v) async {
-    _voiceSpeed = v;
-    await _storage.write(key: 'agent_voice_speed', value: v.toString());
-    notifyListeners();
-  }
-
-  Future<void> setLanguage(String v) async {
-    _language = v;
-    await _storage.write(key: 'ui_language', value: v);
-    notifyListeners();
-  }
-
-  Future<void> setChatLanguage(String v) async {
-    _chatLanguage = v;
-    await _storage.write(key: 'chat_language', value: v);
-    notifyListeners();
-  }
+  Future<void> setName(String v) async { _name = v; await _save(); }
+  Future<void> setPersona(String v) async { _persona = v; await _save(); }
+  Future<void> setVoiceId(String v) async { _voiceId = v; await _save(); }
+  Future<void> setVoiceSpeed(double v) async { _voiceSpeed = v; await _save(); }
+  Future<void> setLanguage(String v) async { _language = v; await _save(); }
+  Future<void> setChatLanguage(String v) async { _chatLanguage = v; await _save(); }
 }

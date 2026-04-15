@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message.dart';
+import 'json_file_store.dart';
 
 class ChatTopic {
   final String id;
@@ -50,23 +50,20 @@ class ChatTopic {
   }
 }
 
-/// Manages chat topics with persistence.
 class ChatStore extends ChangeNotifier {
   static final ChatStore instance = ChatStore._();
   ChatStore._();
 
-  final _storage = const FlutterSecureStorage();
+  final _store = JsonFileStore('chat_topics.json');
   final _uuid = const Uuid();
-  static const _key = 'chat_topics';
   List<ChatTopic> _topics = [];
 
   List<ChatTopic> get topics => List.unmodifiable(_topics);
 
   Future<void> load() async {
-    final raw = await _storage.read(key: _key);
-    if (raw != null) {
-      final list = jsonDecode(raw) as List;
-      _topics = list.map((e) => ChatTopic.fromJson(e)).toList();
+    final data = await _store.read();
+    if (data is List) {
+      _topics = data.map((e) => ChatTopic.fromJson(e)).toList();
     }
   }
 
@@ -82,13 +79,11 @@ class ChatStore extends ChangeNotifier {
     final topic = _topics.firstWhere((t) => t.id == topicId);
     topic.messages.add(message);
     topic.updatedAt = DateTime.now();
-    // Auto-title from first user message
     if (topic.title == '新对话' && message.role == MessageRole.user) {
       topic.title = message.content.length > 20
           ? '${message.content.substring(0, 20)}...'
           : message.content;
     }
-    // Move to top
     _topics.remove(topic);
     _topics.insert(0, topic);
     await _save();
@@ -101,10 +96,13 @@ class ChatStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> clear() async {
+    _topics.clear();
+    await _save();
+    notifyListeners();
+  }
+
   Future<void> _save() async {
-    await _storage.write(
-      key: _key,
-      value: jsonEncode(_topics.map((e) => e.toJson()).toList()),
-    );
+    await _store.write(_topics.map((e) => e.toJson()).toList());
   }
 }

@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'json_file_store.dart';
 
 class ActivityEntry {
   final String action;
@@ -30,37 +29,30 @@ class ActivityEntry {
       );
 }
 
-/// Persisted activity log for tool executions.
 class ActivityLog extends ChangeNotifier {
   static final ActivityLog instance = ActivityLog._();
   ActivityLog._();
 
-  final _storage = const FlutterSecureStorage();
-  static const _key = 'activity_log';
+  final _store = JsonFileStore('activity_log.json');
   List<ActivityEntry> _entries = [];
 
   List<ActivityEntry> get entries => List.unmodifiable(_entries);
 
   Future<void> load() async {
-    final raw = await _storage.read(key: _key);
-    if (raw != null) {
-      final list = jsonDecode(raw) as List;
-      _entries = list.map((e) => ActivityEntry.fromJson(e)).toList();
+    final data = await _store.read();
+    if (data is List) {
+      _entries = data.map((e) => ActivityEntry.fromJson(e)).toList();
     }
   }
 
   Future<void> add(ActivityEntry entry) async {
     _entries.insert(0, entry);
-    // Keep last 200 entries
     if (_entries.length > 200) _entries = _entries.sublist(0, 200);
     await _save();
     notifyListeners();
   }
 
   Future<void> _save() async {
-    await _storage.write(
-      key: _key,
-      value: jsonEncode(_entries.map((e) => e.toJson()).toList()),
-    );
+    await _store.write(_entries.map((e) => e.toJson()).toList());
   }
 }
