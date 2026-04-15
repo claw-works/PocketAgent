@@ -13,9 +13,10 @@ enum LlmProviderType { openai, anthropic, bedrock, gemini }
 
 class LlmService {
   final ToolRegistry tools;
-  static const maxToolRounds = 5;
 
   LlmService({required this.tools});
+
+  int get maxToolRounds => AgentConfig.instance.maxToolRounds;
 
   LlmConfigStore get _config => LlmConfigStore.instance;
 
