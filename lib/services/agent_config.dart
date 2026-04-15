@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'json_file_store.dart';
+import 'skill/skill_registry.dart';
 
 /// Agent profile configuration — name, persona, voice, etc.
 /// Non-sensitive, uses file storage.
@@ -25,10 +26,13 @@ class AgentConfig extends ChangeNotifier {
   String get chatLanguage => _chatLanguage;
   int get maxToolRounds => _maxToolRounds;
 
-  String get systemPrompt =>
-      '你是 $_name，一个运行在用户手机上的私人 AI 助手。'
-      '你的性格是：$_persona。'
-      '你可以通过工具直接操控这台设备。回答简洁。';
+  String get systemPrompt {
+    final base = '你是 $_name，一个运行在用户设备上的私人 AI 助手。'
+        '你的性格是：$_persona。'
+        '你可以通过工具直接操控这台设备。回答简洁。';
+    final skills = SkillRegistry.instance.combinedPrompt;
+    return base + skills;
+  }
 
   Future<void> load() async {
     final data = await _store.read();

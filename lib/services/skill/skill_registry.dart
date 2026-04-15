@@ -1,18 +1,43 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'skill_model.dart';
-import 'skill_runner.dart';
-import '../cdp_client.dart';
 import '../pa_paths.dart';
 
-/// Manages installed skills from ~/.pocketagent/skills/ (desktop) or app docs (mobile)
+/// A Skill is a directory of markdown files that give the AI knowledge and SOPs.
+/// 
+/// Structure:
+///   ~/.pocketagent/skills/
+///   └── shopping_assistant/
+///       ├── skill.md              # Role, strategy, context
+///       ├── search_product.md     # SOP 1
+///       └── checkout.md           # SOP 2
+///
+/// skill.md is the main entry point (required).
+/// All other .md files are SOPs that the AI can reference.
+/// Everything is injected into the system prompt.
+class Skill {
+  final String name;
+  final String skillPrompt;      // Content of skill.md
+  final Map<String, String> sops; // filename → content
+
+  Skill({required this.name, required this.skillPrompt, this.sops = const {}});
+
+  /// Full prompt text: skill.md + all SOPs concatenated.
+  String get fullPrompt {
+    final buf = StringBuffer(skillPrompt);
+    for (final entry in sops.entries) {
+      buf.writeln('\n\n---\n');
+      buf.writeln(entry.value);
+    }
+    return buf.toString();
+  }
+}
+
+/// Manages skills from ~/.pocketagent/skills/
 class SkillRegistry {
   static final SkillRegistry instance = SkillRegistry._();
   SkillRegistry._();
 
   final _skills = <String, Skill>{};
-  final _cdp = CdpClient();
   static String? _skillsDir;
 
   static Future<String> get skillsDir async {
@@ -23,19 +48,27 @@ class SkillRegistry {
   List<Skill> get all => _skills.values.toList();
   Skill? get(String name) => _skills[name];
 
+  /// Combined prompt from all enabled skills, injected into system prompt.
+  String get combinedPrompt {
+    if (_skills.isEmpty) return '';
+    final buf = StringBuffer('\n\n# 你的技能\n');
+    for (final skill in _skills.values) {
+      buf.writeln('\n${skill.fullPrompt}');
+    }
+    return buf.toString();
+  }
+
   Future<void> load() async {
     final dirPath = await skillsDir;
     final dir = Directory(dirPath);
     await dir.create(recursive: true);
 
-    // Scan all subdirectories for skill.json
     await for (final entity in dir.list()) {
       if (entity is Directory) {
         await _loadSkillFromDir(entity);
       }
     }
 
-    // Install builtins if no skills found
     if (_skills.isEmpty) {
       await _installBuiltins();
     }
@@ -44,47 +77,43 @@ class SkillRegistry {
   }
 
   Future<void> _loadSkillFromDir(Directory dir) async {
-    // Try skill.json first, then skill.yaml
-    final jsonFile = File('${dir.path}/skill.json');
-    final yamlFile = File('${dir.path}/skill.yaml');
+    final name = dir.path.split('/').last;
+    final skillFile = File('${dir.path}/skill.md');
+    if (!await skillFile.exists()) return;
 
     try {
-      if (await jsonFile.exists()) {
-        final data = jsonDecode(await jsonFile.readAsString());
-        final skill = Skill.fromJson(Map<String, dynamic>.from(data));
-        _skills[skill.name] = skill;
-      } else if (await yamlFile.exists()) {
-        // Simple YAML parser for our subset (or read as JSON-compatible YAML)
-        // For now, skills use JSON format. YAML support can be added with a package.
-        debugPrint('[Skills] YAML not yet supported, use skill.json: ${dir.path}');
+      final skillPrompt = await skillFile.readAsString();
+      final sops = <String, String>{};
+
+      await for (final file in dir.list()) {
+        if (file is File && file.path.endsWith('.md') && !file.path.endsWith('skill.md')) {
+          final sopName = file.path.split('/').last.replaceAll('.md', '');
+          sops[sopName] = await file.readAsString();
+        }
       }
+
+      _skills[name] = Skill(name: name, skillPrompt: skillPrompt, sops: sops);
     } catch (e) {
-      debugPrint('[Skills] Failed to load skill from ${dir.path}: $e');
+      debugPrint('[Skills] Failed to load $name: $e');
     }
   }
 
-  /// Install a skill from a remote URL (raw JSON file).
   Future<void> installFromUrl(String url) async {
+    // Download a .md file and save as a single-file skill
     final client = HttpClient();
     final request = await client.getUrl(Uri.parse(url));
     final response = await request.close();
-    final body = await response.transform(utf8.decoder).join();
-    final data = jsonDecode(body);
-    final skill = Skill.fromJson(Map<String, dynamic>.from(data));
-    await _saveSkill(skill);
-    _skills[skill.name] = skill;
-    debugPrint('[Skills] Installed: ${skill.name}');
-  }
+    final content = await response.transform(const SystemEncoding().decoder).join();
 
-  /// Install a skill from a GitHub repo path: owner/repo/path/to/skill.json
-  Future<void> installFromGithub(String repoPath) async {
-    final url = 'https://raw.githubusercontent.com/$repoPath/main/skill.json';
-    await installFromUrl(url);
-  }
+    // Extract name from first heading or URL
+    final nameMatch = RegExp(r'^#\s+(.+)$', multiLine: true).firstMatch(content);
+    final name = nameMatch?.group(1)?.toLowerCase().replaceAll(RegExp(r'\s+'), '_') ??
+        url.split('/').last.replaceAll('.md', '');
 
-  Future<void> add(Skill skill) async {
-    await _saveSkill(skill);
-    _skills[skill.name] = skill;
+    final dirPath = '${await skillsDir}/$name';
+    await Directory(dirPath).create(recursive: true);
+    await File('$dirPath/skill.md').writeAsString(content);
+    await _loadSkillFromDir(Directory(dirPath));
   }
 
   Future<void> remove(String name) async {
@@ -93,60 +122,80 @@ class SkillRegistry {
     if (await dir.exists()) await dir.delete(recursive: true);
   }
 
-  Future<String> run(String name, Map<String, dynamic> params) async {
-    final skill = _skills[name];
-    if (skill == null) return jsonEncode({'status': 'error', 'message': '未找到技能: $name'});
-
-    if (!_cdp.isConnected) {
-      try {
-        await _cdp.connect();
-      } catch (e) {
-        return jsonEncode({'status': 'error', 'message': '浏览器连接失败: $e'});
-      }
-    }
-
-    final runner = SkillRunner(_cdp);
-    return runner.run(skill, params);
-  }
-
-  Future<void> _saveSkill(Skill skill) async {
-    final dir = Directory('${await skillsDir}/${skill.name}');
-    await dir.create(recursive: true);
-    final file = File('${dir.path}/skill.json');
-    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(skill.toJson()));
-  }
-
   Future<void> _installBuiltins() async {
-    final builtins = [
-      Skill(
-        name: 'google_search',
-        description: '在 Google 搜索关键词并返回结果',
-        params: [SkillParam(name: 'query', description: '搜索关键词', required: true)],
-        steps: [
-          SkillStep(action: 'navigate', args: {'url': 'https://www.google.com'}),
-          SkillStep(action: 'wait', args: {'seconds': 1}),
-          SkillStep(action: 'type_text', args: {'selector': 'textarea[name=q]', 'text': '{{query}}'}),
-          SkillStep(action: 'press_key', args: {'key': 'Enter'}),
-          SkillStep(action: 'wait', args: {'seconds': 2}),
-          SkillStep(action: 'query_all', args: {'selector': 'h3', 'save_as': 'results', 'limit': 5}),
-          SkillStep(action: 'return', args: {'value': '{{results}}'}),
-        ],
-      ),
-      Skill(
-        name: 'open_website',
-        description: '打开指定网站并获取页面主要内容',
-        params: [SkillParam(name: 'url', description: '网站 URL', required: true)],
-        steps: [
-          SkillStep(action: 'navigate', args: {'url': '{{url}}'}),
-          SkillStep(action: 'wait', args: {'seconds': 2}),
-          SkillStep(action: 'get_text', args: {'selector': 'body', 'save_as': 'content'}),
-          SkillStep(action: 'return', args: {'value': '{{content}}'}),
-        ],
-      ),
-    ];
-    for (final s in builtins) {
-      await _saveSkill(s);
-      _skills[s.name] = s;
+    final dirPath = await skillsDir;
+
+    // Built-in: Google Search
+    final searchDir = Directory('$dirPath/google_search');
+    await searchDir.create(recursive: true);
+    await File('${searchDir.path}/skill.md').writeAsString('''
+# Google 搜索助手
+
+## 你的角色
+你是一个搜索专家，帮用户在 Google 上找到最相关的信息。
+
+## 策略
+- 理解用户真正想找什么，必要时追问
+- 将自然语言转化为高效的搜索关键词
+- 搜索后总结前 5 条结果的要点
+- 如果结果不理想，换关键词重试
+
+## 输出格式
+用简洁的中文总结搜索结果，附上关键链接。
+''');
+    await File('${searchDir.path}/search.md').writeAsString('''
+# 搜索 SOP
+
+## 操作步骤
+1. 用 browser 工具导航到 `https://www.google.com/search?q={关键词}`
+2. 等待 2 秒让页面加载
+3. 用 get_content 获取页面文本
+4. 提取搜索结果标题和摘要
+
+## 选择器参考（如果用 execute_js）
+- 搜索结果标题：`h3`
+- 搜索结果摘要：`.VwiC3b`
+
+## 异常处理
+- 如果出现验证码，告诉用户手动处理
+- 如果页面结构变化，用 get_content(format: text) 直接读文本
+''');
+
+    // Built-in: 通用浏览器助手
+    final browserDir = Directory('$dirPath/browser_assistant');
+    await browserDir.create(recursive: true);
+    await File('${browserDir.path}/skill.md').writeAsString('''
+# 浏览器操作助手
+
+## 你的角色
+你可以操控用户的浏览器完成各种网页操作。
+
+## 可用工具
+- browser(navigate): 打开网页
+- browser(get_content): 读取页面内容（text 或 html）
+- browser(execute_js): 执行 JavaScript
+- browser(click): 点击元素（CSS 选择器）
+- browser(type_text): 在输入框输入文字
+- browser(screenshot): 截图
+
+## 操作原则
+1. 先 navigate 到目标页面
+2. 用 get_content 了解页面结构
+3. 用精准的 CSS 选择器操作元素
+4. 操作后再 get_content 确认结果
+5. 遇到问题时用 screenshot 截图分析
+
+## 注意事项
+- 不要自动填写密码或支付信息，需要用户确认
+- 操作前告诉用户你要做什么
+- 如果页面需要登录，提示用户先手动登录
+''');
+
+    // Reload
+    await for (final entity in Directory(dirPath).list()) {
+      if (entity is Directory) {
+        await _loadSkillFromDir(entity);
+      }
     }
   }
 }
