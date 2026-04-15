@@ -72,7 +72,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       },
     );
 
-    final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: reply);
+    // Use streaming content if reply is an error but we already got text
+    final finalContent = (reply.startsWith('❌') && _streamingContent.isNotEmpty)
+        ? _streamingContent
+        : reply;
+
+    final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: finalContent);
     await ChatStore.instance.addMessage(_topic.id, assistantMsg);
     setState(() {
       _loading = false;

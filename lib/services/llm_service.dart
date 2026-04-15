@@ -88,30 +88,49 @@ class LlmService {
 
     for (var i = 0; i < maxToolRounds; i++) {
       final LlmResponse resp;
+      final isFirstRound = i == 0;
       try {
-        resp = await provider.stream(
-          apiKey: key,
-          baseUrl: base,
-          model: modelName,
-          systemPrompt: systemPrompt,
-          messages: messages,
-          tools: tools.toOpenAI(),
-          onDelta: onDelta,
-        );
+        // Only stream the first round (user-facing). Tool result rounds use non-stream
+        // for stability (some providers reject stream requests with tool results).
+        if (isFirstRound) {
+          resp = await provider.stream(
+            apiKey: key,
+            baseUrl: base,
+            model: modelName,
+            systemPrompt: systemPrompt,
+            messages: messages,
+            tools: tools.toOpenAI(),
+            onDelta: onDelta,
+          );
+        } else {
+          resp = await provider.call(
+            apiKey: key,
+            baseUrl: base,
+            model: modelName,
+            systemPrompt: systemPrompt,
+            messages: messages,
+            tools: tools.toOpenAI(),
+          );
+        }
       } catch (e, st) {
-        debugPrint('[LLM] ❌ Error: $e');
+        debugPrint('[LLM] ❌ Error (round $i): $e');
         debugPrint('[LLM] StackTrace: $st');
         return '❌ 请求失败: $e';
       }
 
-      debugPrint('[LLM] Response: hasToolCalls=${resp.hasToolCalls}, content=${resp.content?.length ?? 0} chars');
+      debugPrint('[LLM] Round $i: hasToolCalls=${resp.hasToolCalls}, content=${resp.content?.length ?? 0} chars');
 
       if (!resp.hasToolCalls) {
+        // If this is a follow-up round after tool execution, stream the final text
+        if (!isFirstRound && resp.content != null) {
+          onDelta(resp.content!);
+        }
         return resp.content ?? '';
       }
 
       messages.add(resp.rawAssistantMessage);
       for (final tc in resp.toolCalls) {
+        debugPrint('[LLM] Tool call: ${tc.name}(${tc.arguments})');
         final result = await tools.call(tc.name, tc.arguments);
         messages.add(provider.buildToolResultMessage(toolCall: tc, result: result));
       }
