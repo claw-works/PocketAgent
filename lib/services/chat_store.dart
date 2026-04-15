@@ -1,108 +1,85 @@
-import 'dart:convert';
+import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message.dart';
-import 'json_file_store.dart';
+import 'db/database.dart';
 
-class ChatTopic {
-  final String id;
-  String title;
-  final List<Message> messages;
-  DateTime updatedAt;
-
-  ChatTopic({
-    required this.id,
-    required this.title,
-    List<Message>? messages,
-    DateTime? updatedAt,
-  })  : messages = messages ?? [],
-        updatedAt = updatedAt ?? DateTime.now();
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'updatedAt': updatedAt.toIso8601String(),
-        'messages': messages
-            .map((m) => {
-                  'id': m.id,
-                  'role': m.role.name,
-                  'content': m.content,
-                  'timestamp': m.timestamp.toIso8601String(),
-                  if (m.toolName != null) 'toolName': m.toolName,
-                })
-            .toList(),
-      };
-
-  factory ChatTopic.fromJson(Map<String, dynamic> j) {
-    final msgs = (j['messages'] as List).map((m) => Message(
-          id: m['id'],
-          role: MessageRole.values.byName(m['role']),
-          content: m['content'],
-          timestamp: DateTime.parse(m['timestamp']),
-          toolName: m['toolName'],
-        )).toList();
-    return ChatTopic(
-      id: j['id'],
-      title: j['title'],
-      messages: msgs,
-      updatedAt: DateTime.parse(j['updatedAt']),
-    );
-  }
-}
-
+/// Chat store backed by SQLite via drift.
 class ChatStore extends ChangeNotifier {
   static final ChatStore instance = ChatStore._();
   ChatStore._();
 
-  final _store = JsonFileStore('chat_topics.json');
   final _uuid = const Uuid();
-  List<ChatTopic> _topics = [];
+  AppDatabase get _db => AppDatabase.instance;
 
-  List<ChatTopic> get topics => List.unmodifiable(_topics);
+  List<ChatTopic> _topics = [];
+  List<ChatTopic> get topics => _topics;
 
   Future<void> load() async {
-    final data = await _store.read();
-    if (data is List) {
-      _topics = data.map((e) => ChatTopic.fromJson(e)).toList();
-    }
+    _topics = await _db.getAllTopics();
+    // Listen for changes
+    _db.watchAllTopics().listen((t) {
+      _topics = t;
+      notifyListeners();
+    });
   }
 
-  ChatTopic create({String? title}) {
-    final topic = ChatTopic(id: _uuid.v4(), title: title ?? '新对话');
-    _topics.insert(0, topic);
-    _save();
+  Future<ChatTopic> create({String? title}) async {
+    final id = _uuid.v4();
+    final now = DateTime.now();
+    await _db.upsertTopic(ChatTopicsCompanion.insert(
+      id: id,
+      title: Value(title ?? '新对话'),
+      createdAt: Value(now),
+      updatedAt: Value(now),
+    ));
+    _topics = await _db.getAllTopics();
     notifyListeners();
-    return topic;
+    return _topics.firstWhere((t) => t.id == id);
+  }
+
+  Future<List<ChatMessage>> getMessages(String topicId) {
+    return _db.getMessages(topicId);
+  }
+
+  Stream<List<ChatMessage>> watchMessages(String topicId) {
+    return _db.watchMessages(topicId);
   }
 
   Future<void> addMessage(String topicId, Message message) async {
+    await _db.insertMessage(ChatMessagesCompanion.insert(
+      id: message.id,
+      topicId: topicId,
+      role: message.role.name,
+      content: message.content,
+      toolName: Value(message.toolName),
+    ));
+
+    // Auto-title from first user message
     final topic = _topics.firstWhere((t) => t.id == topicId);
-    topic.messages.add(message);
-    topic.updatedAt = DateTime.now();
-    if (topic.title == '新对话' && message.role == MessageRole.user) {
-      topic.title = message.content.length > 20
+    var title = topic.title;
+    if (title == '新对话' && message.role == MessageRole.user) {
+      title = message.content.length > 20
           ? '${message.content.substring(0, 20)}...'
           : message.content;
     }
-    _topics.remove(topic);
-    _topics.insert(0, topic);
-    await _save();
-    notifyListeners();
+
+    await _db.upsertTopic(ChatTopicsCompanion(
+      id: Value(topicId),
+      title: Value(title),
+      updatedAt: Value(DateTime.now()),
+    ));
   }
 
   Future<void> delete(String topicId) async {
-    _topics.removeWhere((t) => t.id == topicId);
-    await _save();
-    notifyListeners();
+    await _db.deleteTopic(topicId);
   }
 
   Future<void> clear() async {
-    _topics.clear();
-    await _save();
-    notifyListeners();
+    await _db.deleteAllTopics();
   }
 
-  Future<void> _save() async {
-    await _store.write(_topics.map((e) => e.toJson()).toList());
+  Future<List<ChatMessage>> searchMessages(String query) {
+    return _db.searchMessages(query);
   }
 }

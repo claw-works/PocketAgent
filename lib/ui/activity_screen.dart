@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
 import '../services/activity_log.dart';
+import '../services/db/database.dart' show ActivityEntry;
 
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({super.key});
@@ -43,11 +44,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       final e = entries[i];
                       // Group by date
                       final showDate = i == 0 ||
-                          !_sameDay(entries[i - 1].time, e.time);
+                          !_sameDay(entries[i - 1].time, e.createdAt);
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (showDate) _dateLabel(e.time),
+                          if (showDate) _dateLabel(e.createdAt),
                           _item(e),
                         ],
                       );
@@ -94,7 +95,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   Widget _item(ActivityEntry e) {
     final time =
-        '${e.time.hour.toString().padLeft(2, '0')}:${e.time.minute.toString().padLeft(2, '0')}';
+        '${e.createdAt.hour.toString().padLeft(2, '0')}:${e.createdAt.minute.toString().padLeft(2, '0')}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

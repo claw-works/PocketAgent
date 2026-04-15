@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'chat_detail_screen.dart';
 import '../services/chat_store.dart';
+import '../services/db/database.dart' show ChatTopic;
 
 class ChatTopicsScreen extends StatefulWidget {
   const ChatTopicsScreen({super.key});

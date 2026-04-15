@@ -22,7 +22,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final _uuid = const Uuid();
   late final ToolRegistry _tools;
   late final LlmService _llm;
-  late ChatTopic _topic;
+  late String _topicId;
+  String _topicTitle = '新对话';
+  List<Message> _messages = [];
   bool _loading = false;
   String _streamingContent = '';
   String _statusText = '';
@@ -33,12 +35,50 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     super.initState();
     _tools = ToolRegistry();
     _llm = LlmService(tools: _tools);
+    _init();
+  }
 
+  Future<void> _init() async {
     if (widget.topicId != null) {
-      _topic = ChatStore.instance.topics.firstWhere((t) => t.id == widget.topicId!);
+      _topicId = widget.topicId!;
+      final topic = ChatStore.instance.topics.firstWhere((t) => t.id == _topicId);
+      _topicTitle = topic.title;
     } else {
-      _topic = ChatStore.instance.create();
+      final topic = await ChatStore.instance.create();
+      _topicId = topic.id;
+      _topicTitle = topic.title;
     }
+    await _loadMessages();
+    // Watch for changes
+    ChatStore.instance.watchMessages(_topicId).listen((dbMsgs) {
+      if (!mounted) return;
+      setState(() {
+        _messages = dbMsgs.map((m) => Message(
+          id: m.id,
+          role: MessageRole.values.byName(m.role),
+          content: m.content,
+          toolName: m.toolName,
+          timestamp: m.createdAt,
+        )).toList();
+        // Update title
+        final topics = ChatStore.instance.topics;
+        final t = topics.where((t) => t.id == _topicId).firstOrNull;
+        if (t != null) _topicTitle = t.title;
+      });
+    });
+  }
+
+  Future<void> _loadMessages() async {
+    final dbMsgs = await ChatStore.instance.getMessages(_topicId);
+    setState(() {
+      _messages = dbMsgs.map((m) => Message(
+        id: m.id,
+        role: MessageRole.values.byName(m.role),
+        content: m.content,
+        toolName: m.toolName,
+        timestamp: m.createdAt,
+      )).toList();
+    });
   }
 
   void _scrollToBottom() {
@@ -57,7 +97,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _inputCtrl.clear();
 
     final userMsg = Message(id: _uuid.v4(), role: MessageRole.user, content: text);
-    await ChatStore.instance.addMessage(_topic.id, userMsg);
+    await ChatStore.instance.addMessage(_topicId, userMsg);
     setState(() {
       _loading = true;
       _streamingContent = '';
@@ -66,7 +106,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _scrollToBottom();
 
     final reply = await _llm.streamChat(
-      _topic.messages,
+      _messages,
       onDelta: (delta) {
         setState(() {
           _streamingContent += delta;
@@ -85,7 +125,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         : reply;
 
     final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: finalContent);
-    await ChatStore.instance.addMessage(_topic.id, assistantMsg);
+    await ChatStore.instance.addMessage(_topicId, assistantMsg);
     setState(() {
       _loading = false;
       _streamingContent = '';
@@ -119,7 +159,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(_topic.title,
+            child: Text(_topicTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -131,7 +171,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _messageList() {
-    final msgCount = _topic.messages.length;
+    final msgCount = _messages.length;
     final hasStreaming = _loading && _streamingContent.isNotEmpty;
     final hasStatus = _loading && _statusText.isNotEmpty;
     final showSpinner = _loading && _streamingContent.isEmpty && _statusText.isEmpty;
@@ -150,7 +190,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       itemCount: totalCount,
       itemBuilder: (_, i) {
         if (i < msgCount) {
-          return MessageBubble(message: _topic.messages[i]);
+          return MessageBubble(message: _messages[i]);
         }
         final extra = i - msgCount;
         // Streaming bubble

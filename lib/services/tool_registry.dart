@@ -68,21 +68,18 @@ class ToolRegistry {
     if (tool == null) return '错误: 未知工具 "$name"';
     try {
       final result = await tool.execute(args);
-      // Log to activity
-      ActivityLog.instance.add(ActivityEntry(
+      ActivityLog.instance.add(
         action: tool.description.split('。').first.split('（').first,
         detail: '$name(${args.keys.join(", ")})',
-        time: DateTime.now(),
         success: !result.contains('"status":"error"'),
-      ));
+      );
       return result;
     } catch (e) {
-      ActivityLog.instance.add(ActivityEntry(
+      ActivityLog.instance.add(
         action: name,
         detail: '执行失败: $e',
-        time: DateTime.now(),
         success: false,
-      ));
+      );
       return '工具执行失败: $e';
     }
   }
