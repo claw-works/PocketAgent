@@ -3,8 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Simple JSON file storage for non-sensitive data (chat history, activity log).
-/// Use flutter_secure_storage only for secrets (API keys).
+/// Simple JSON file storage for non-sensitive data.
 class JsonFileStore {
   final String filename;
   JsonFileStore(this.filename);

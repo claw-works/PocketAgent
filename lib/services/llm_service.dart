@@ -1,7 +1,7 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/message.dart';
 import 'tool_registry.dart';
 import 'agent_config.dart';
+import 'llm_config_store.dart';
 import 'providers/llm_provider.dart';
 import 'providers/openai_provider.dart';
 import 'providers/anthropic_provider.dart';
@@ -12,24 +12,22 @@ enum LlmProviderType { openai, anthropic, bedrock, gemini }
 
 class LlmService {
   final ToolRegistry tools;
-  final _storage = const FlutterSecureStorage();
-
   static const maxToolRounds = 5;
 
   LlmService({required this.tools});
 
-  // --- Storage ---
-  Future<String?> get apiKey => _storage.read(key: 'api_key');
-  Future<void> setApiKey(String v) => _storage.write(key: 'api_key', value: v);
+  LlmConfigStore get _config => LlmConfigStore.instance;
 
-  Future<String?> get baseUrl => _storage.read(key: 'base_url');
-  Future<void> setBaseUrl(String v) => _storage.write(key: 'base_url', value: v);
+  // --- Delegated accessors for settings UI ---
+  String? get apiKey => _config.apiKey;
+  String? get baseUrl => _config.baseUrl;
+  String? get model => _config.model;
+  String? get providerName => _config.provider;
 
-  Future<String?> get model => _storage.read(key: 'model');
-  Future<void> setModel(String v) => _storage.write(key: 'model', value: v);
-
-  Future<String?> get providerName => _storage.read(key: 'provider');
-  Future<void> setProvider(String v) => _storage.write(key: 'provider', value: v);
+  Future<void> setApiKey(String v) => _config.setApiKey(v);
+  Future<void> setBaseUrl(String v) => _config.setBaseUrl(v);
+  Future<void> setModel(String v) => _config.setModel(v);
+  Future<void> setProvider(String v) => _config.setProvider(v);
 
   // --- Provider resolution ---
   static const _defaultBaseUrls = {
@@ -64,23 +62,23 @@ class LlmService {
     }
   }
 
-  /// Non-streaming chat (legacy).
+  /// Non-streaming chat.
   Future<String> chat(List<Message> history) async {
     return streamChat(history, onDelta: (_) {});
   }
 
-  /// Streaming chat — calls [onDelta] for each text chunk.
+  /// Streaming chat.
   Future<String> streamChat(
     List<Message> history, {
     required void Function(String delta) onDelta,
   }) async {
-    final key = await apiKey;
+    final key = apiKey;
     if (key == null || key.isEmpty) return '⚠️ 请先在设置中配置 API Key';
 
-    final type = _parseProvider(await providerName);
+    final type = _parseProvider(providerName);
     final provider = _createProvider(type);
-    final base = await baseUrl ?? _defaultBaseUrls[type]!;
-    final modelName = await model ?? _defaultModels[type]!;
+    final base = baseUrl ?? _defaultBaseUrls[type]!;
+    final modelName = model ?? _defaultModels[type]!;
     final systemPrompt = AgentConfig.instance.systemPrompt;
 
     final messages = history.map((m) => m.toOpenAI()).toList();
@@ -105,7 +103,6 @@ class LlmService {
         return resp.content ?? '';
       }
 
-      // Tool call round — execute tools, then loop back (no streaming for tool rounds)
       messages.add(resp.rawAssistantMessage);
       for (final tc in resp.toolCalls) {
         final result = await tools.call(tc.name, tc.arguments);
