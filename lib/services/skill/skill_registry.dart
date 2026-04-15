@@ -1,42 +1,93 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'skill_model.dart';
 import 'skill_runner.dart';
 import '../cdp_client.dart';
-import '../json_file_store.dart';
 
-/// Manages installed skills — load, save, run.
+/// Manages installed skills from ~/.pocketagent/skills/
 class SkillRegistry {
   static final SkillRegistry instance = SkillRegistry._();
   SkillRegistry._();
 
-  final _store = JsonFileStore('skills.json');
   final _skills = <String, Skill>{};
   final _cdp = CdpClient();
+
+  static String get _baseDir {
+    final home = Platform.environment['HOME'] ?? '';
+    return '$home/.pocketagent';
+  }
+
+  static String get skillsDir => '$_baseDir/skills';
 
   List<Skill> get all => _skills.values.toList();
   Skill? get(String name) => _skills[name];
 
   Future<void> load() async {
-    final data = await _store.read();
-    if (data is List) {
-      for (final s in data) {
-        final skill = Skill.fromJson(Map<String, dynamic>.from(s));
-        _skills[skill.name] = skill;
+    final dir = Directory(skillsDir);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+      await _installBuiltins();
+    }
+
+    // Scan all subdirectories for skill.yaml / skill.json
+    await for (final entity in dir.list()) {
+      if (entity is Directory) {
+        await _loadSkillFromDir(entity);
       }
     }
-    // Load built-in skills if empty
-    if (_skills.isEmpty) _loadBuiltins();
+
+    debugPrint('[Skills] Loaded ${_skills.length} skills: ${_skills.keys.join(', ')}');
+  }
+
+  Future<void> _loadSkillFromDir(Directory dir) async {
+    // Try skill.json first, then skill.yaml
+    final jsonFile = File('${dir.path}/skill.json');
+    final yamlFile = File('${dir.path}/skill.yaml');
+
+    try {
+      if (await jsonFile.exists()) {
+        final data = jsonDecode(await jsonFile.readAsString());
+        final skill = Skill.fromJson(Map<String, dynamic>.from(data));
+        _skills[skill.name] = skill;
+      } else if (await yamlFile.exists()) {
+        // Simple YAML parser for our subset (or read as JSON-compatible YAML)
+        // For now, skills use JSON format. YAML support can be added with a package.
+        debugPrint('[Skills] YAML not yet supported, use skill.json: ${dir.path}');
+      }
+    } catch (e) {
+      debugPrint('[Skills] Failed to load skill from ${dir.path}: $e');
+    }
+  }
+
+  /// Install a skill from a remote URL (raw JSON file).
+  Future<void> installFromUrl(String url) async {
+    final client = HttpClient();
+    final request = await client.getUrl(Uri.parse(url));
+    final response = await request.close();
+    final body = await response.transform(utf8.decoder).join();
+    final data = jsonDecode(body);
+    final skill = Skill.fromJson(Map<String, dynamic>.from(data));
+    await _saveSkill(skill);
+    _skills[skill.name] = skill;
+    debugPrint('[Skills] Installed: ${skill.name}');
+  }
+
+  /// Install a skill from a GitHub repo path: owner/repo/path/to/skill.json
+  Future<void> installFromGithub(String repoPath) async {
+    final url = 'https://raw.githubusercontent.com/$repoPath/main/skill.json';
+    await installFromUrl(url);
   }
 
   Future<void> add(Skill skill) async {
+    await _saveSkill(skill);
     _skills[skill.name] = skill;
-    await _save();
   }
 
   Future<void> remove(String name) async {
     _skills.remove(name);
-    await _save();
+    final dir = Directory('$skillsDir/$name');
+    if (await dir.exists()) await dir.delete(recursive: true);
   }
 
   Future<String> run(String name, Map<String, dynamic> params) async {
@@ -55,11 +106,14 @@ class SkillRegistry {
     return runner.run(skill, params);
   }
 
-  Future<void> _save() async {
-    await _store.write(_skills.values.map((s) => s.toJson()).toList());
+  Future<void> _saveSkill(Skill skill) async {
+    final dir = Directory('$skillsDir/${skill.name}');
+    await dir.create(recursive: true);
+    final file = File('${dir.path}/skill.json');
+    await file.writeAsString(const JsonEncoder.withIndent('  ').convert(skill.toJson()));
   }
 
-  void _loadBuiltins() {
+  Future<void> _installBuiltins() async {
     final builtins = [
       Skill(
         name: 'google_search',
@@ -82,15 +136,14 @@ class SkillRegistry {
         steps: [
           SkillStep(action: 'navigate', args: {'url': '{{url}}'}),
           SkillStep(action: 'wait', args: {'seconds': 2}),
-          SkillStep(action: 'execute_js', args: {'expression': 'document.title'}),
           SkillStep(action: 'get_text', args: {'selector': 'body', 'save_as': 'content'}),
           SkillStep(action: 'return', args: {'value': '{{content}}'}),
         ],
       ),
     ];
     for (final s in builtins) {
+      await _saveSkill(s);
       _skills[s.name] = s;
     }
-    _save();
   }
 }

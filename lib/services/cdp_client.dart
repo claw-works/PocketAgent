@@ -18,11 +18,15 @@ class CdpClient {
       final chromePath = await _findChrome();
       if (chromePath == null) throw Exception('Chrome not found');
 
+      final home = Platform.environment['HOME'] ?? '';
+      final profileDir = '$home/.pocketagent/chrome_profile';
+      await Directory(profileDir).create(recursive: true);
+
       await Process.start(chromePath, [
         '--remote-debugging-port=$port',
         '--no-first-run',
         '--no-default-browser-check',
-        '--user-data-dir=${Directory.systemTemp.path}/pocket_agent_chrome',
+        '--user-data-dir=$profileDir',
       ]);
 
       // Wait for Chrome to start
