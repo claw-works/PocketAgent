@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message.dart';
 import '../services/llm_service.dart';
@@ -25,6 +26,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _loading = false;
   String _streamingContent = '';
   String _statusText = '';
+  final _inputFocus = FocusNode();
 
   @override
   void initState() {
@@ -195,47 +197,67 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       color: PAColors.bgPrimary,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: PAColors.bgTertiary,
-              borderRadius: BorderRadius.circular(21),
-            ),
-            child: const Icon(Icons.mic, size: 20, color: PAColors.textPrimary),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: PAColors.bgInput,
-                borderRadius: BorderRadius.circular(PARadius.pill),
-                border: Border.all(color: PAColors.border),
-              ),
-              child: TextField(
-                controller: _inputCtrl,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                style: const TextStyle(fontSize: 15, color: PAColors.textPrimary),
-                decoration: const InputDecoration.collapsed(
-                    hintText: '跟 AI 说话...',
-                    hintStyle: TextStyle(color: PAColors.textMuted)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: _send,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
             child: Container(
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                gradient: PAColors.gradientAccent,
+                color: PAColors.bgTertiary,
                 borderRadius: BorderRadius.circular(21),
               ),
-              child: const Icon(Icons.arrow_upward, size: 20, color: Colors.white),
+              child: const Icon(Icons.mic, size: 20, color: PAColors.textPrimary),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: PAColors.bgInput,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: PAColors.border),
+              ),
+              constraints: const BoxConstraints(maxHeight: 150),
+              child: KeyboardListener(
+                focusNode: _inputFocus,
+                onKeyEvent: (event) {
+                  if (event is KeyDownEvent &&
+                      event.logicalKey == LogicalKeyboardKey.enter &&
+                      !HardwareKeyboard.instance.isShiftPressed) {
+                    // Prevent the newline from being inserted
+                    WidgetsBinding.instance.addPostFrameCallback((_) => _send());
+                  }
+                },
+                child: TextField(
+                  controller: _inputCtrl,
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  style: const TextStyle(fontSize: 15, color: PAColors.textPrimary),
+                  decoration: const InputDecoration.collapsed(
+                      hintText: '跟 AI 说话... (Shift+Enter 换行)',
+                      hintStyle: TextStyle(color: PAColors.textMuted)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: GestureDetector(
+              onTap: _send,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  gradient: PAColors.gradientAccent,
+                  borderRadius: BorderRadius.circular(21),
+                ),
+                child: const Icon(Icons.arrow_upward, size: 20, color: Colors.white),
+              ),
             ),
           ),
         ],
@@ -247,6 +269,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   void dispose() {
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
+    _inputFocus.dispose();
     super.dispose();
   }
 }
