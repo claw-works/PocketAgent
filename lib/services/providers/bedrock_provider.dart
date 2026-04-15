@@ -50,10 +50,12 @@ class BedrockProvider implements LlmProvider {
     required List<Map<String, dynamic>> messages,
     required List<Map<String, dynamic>> tools,
   }) async {
+    final body = _buildBody(model: model, systemPrompt: systemPrompt, messages: messages, tools: tools);
+    debugPrint('[Bedrock] converse body: ${jsonEncode(body).substring(0, 200.clamp(0, jsonEncode(body).length))}...');
     final resp = await http.post(
       Uri.parse('$baseUrl/model/$model/converse'),
       headers: _headers(apiKey),
-      body: jsonEncode(_buildBody(model: model, systemPrompt: systemPrompt, messages: messages, tools: tools)),
+      body: jsonEncode(body),
     );
     if (resp.statusCode != 200) {
       debugPrint('[Bedrock] ❌ converse ${resp.statusCode}: ${resp.body}');
@@ -179,11 +181,16 @@ class BedrockProvider implements LlmProvider {
 
   Map<String, dynamic>? _convertMessage(Map<String, dynamic> msg) {
     final role = msg['role'];
+    final content = msg['content'];
+
+    // Already in Bedrock format (content is a List of blocks) — pass through
+    if (content is List) return msg;
+
+    // OpenAI-style tool result → Bedrock format
     if (role == 'tool') {
       return {'role': 'user', 'content': [{'toolResult': {'toolUseId': msg['tool_call_id'], 'content': [{'text': msg['content']}]}}]};
     }
-    if (role == 'assistant' && msg['content'] is List) return msg;
-    final content = msg['content'];
+
     if (content == null || (content is String && content.isEmpty)) return null;
     return {'role': role, 'content': [{'text': content}]};
   }
