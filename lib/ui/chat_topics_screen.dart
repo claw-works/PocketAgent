@@ -122,6 +122,7 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
       onDismissed: (_) => ChatStore.instance.delete(t.id),
       child: GestureDetector(
         onTap: () => _openChat(context, t.id),
+        onLongPress: () => _confirmDelete(context, t),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           child: Row(
@@ -179,6 +180,67 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => ChatDetailScreen(topicId: topicId),
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context, ChatTopic t) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: PAColors.bgSecondary,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('删除「${t.title}」？',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: PAColors.textPrimary)),
+              const SizedBox(height: 8),
+              const Text('此操作不可撤销', style: TextStyle(fontSize: 13, color: PAColors.textMuted)),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: PAColors.bgTertiary,
+                          borderRadius: BorderRadius.circular(PARadius.md),
+                        ),
+                        child: const Text('取消', textAlign: TextAlign.center,
+                            style: TextStyle(color: PAColors.textSecondary, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        ChatStore.instance.delete(t.id);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          gradient: PAColors.gradientNeon,
+                          borderRadius: BorderRadius.circular(PARadius.md),
+                        ),
+                        child: const Text('删除', textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
