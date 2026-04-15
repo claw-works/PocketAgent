@@ -4,27 +4,28 @@ import 'package:flutter/foundation.dart';
 import 'skill_model.dart';
 import 'skill_runner.dart';
 import '../cdp_client.dart';
+import '../pa_paths.dart';
 
-/// Manages installed skills from ~/.pocketagent/skills/
+/// Manages installed skills from ~/.pocketagent/skills/ (desktop) or app docs (mobile)
 class SkillRegistry {
   static final SkillRegistry instance = SkillRegistry._();
   SkillRegistry._();
 
   final _skills = <String, Skill>{};
   final _cdp = CdpClient();
+  static String? _skillsDir;
 
-  static String get _baseDir {
-    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
-    return '$home/.pocketagent';
+  static Future<String> get skillsDir async {
+    _skillsDir ??= await PAPaths.skillsDir;
+    return _skillsDir!;
   }
-
-  static String get skillsDir => '$_baseDir/skills';
 
   List<Skill> get all => _skills.values.toList();
   Skill? get(String name) => _skills[name];
 
   Future<void> load() async {
-    final dir = Directory(skillsDir);
+    final dirPath = await skillsDir;
+    final dir = Directory(dirPath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
       await _installBuiltins();
@@ -86,7 +87,7 @@ class SkillRegistry {
 
   Future<void> remove(String name) async {
     _skills.remove(name);
-    final dir = Directory('$skillsDir/$name');
+    final dir = Directory('${await skillsDir}/$name');
     if (await dir.exists()) await dir.delete(recursive: true);
   }
 
@@ -107,7 +108,7 @@ class SkillRegistry {
   }
 
   Future<void> _saveSkill(Skill skill) async {
-    final dir = Directory('$skillsDir/${skill.name}');
+    final dir = Directory('${await skillsDir}/${skill.name}');
     await dir.create(recursive: true);
     final file = File('${dir.path}/skill.json');
     await file.writeAsString(const JsonEncoder.withIndent('  ').convert(skill.toJson()));

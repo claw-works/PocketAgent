@@ -58,7 +58,7 @@ class SkillTool extends BaseTool {
                 'description': s.description,
                 'params': s.params.map((p) => {'name': p.name, 'required': p.required}).toList(),
               }).toList();
-          return jsonEncode({'status': 'ok', 'skills': skills, 'dir': SkillRegistry.skillsDir});
+          return jsonEncode({'status': 'ok', 'skills': skills, 'dir': await SkillRegistry.skillsDir});
 
         case 'run':
           final name = args['skill_name'] as String? ?? '';

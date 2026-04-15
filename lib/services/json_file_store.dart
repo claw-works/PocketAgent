@@ -1,16 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
+import 'pa_paths.dart';
 
-/// Simple JSON file storage for non-sensitive data.
+/// Simple JSON file storage. All files go under PAPaths.dataDir.
 class JsonFileStore {
   final String filename;
   JsonFileStore(this.filename);
 
   Future<File> get _file async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/$filename');
+    final dir = await PAPaths.dataDir;
+    return File('$dir/$filename');
   }
 
   Future<dynamic> read() async {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'pa_paths.dart';
 
 /// Chrome DevTools Protocol client over WebSocket.
 /// Launches Chrome with --remote-debugging-port and connects via CDP.
@@ -18,9 +19,7 @@ class CdpClient {
       final chromePath = await _findChrome();
       if (chromePath == null) throw Exception('Chrome not found');
 
-      final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
-      final profileDir = '$home/.pocketagent/chrome_profile';
-      await Directory(profileDir).create(recursive: true);
+      final profileDir = await PAPaths.chromeProfileDir;
 
       await Process.start(chromePath, [
         '--remote-debugging-port=$port',
