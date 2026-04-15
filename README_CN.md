@@ -2,6 +2,8 @@
 
 > 你的私人 AI Agent，直接操控你的设备。
 
+[English](README.md)
+
 跨平台 AI Agent 应用——手机、桌面、任何设备。LLM 直接驱动本机能力，不依赖云端中转。
 
 ```
@@ -21,7 +23,8 @@ Tool Call 循环（最多 20 轮）
 - 🔄 **多轮 Agent 循环** — LLM 自主调用工具、观察结果、继续执行，直到任务完成
 - 🌊 **流式输出** — 四个 Provider 全部支持 Streaming，逐字显示
 - 🔧 **12+ 本机工具** — 相机、GPS、日历、剪贴板、通知、语音、Shell、浏览器操控...
-- 🎯 **Skill 系统** — 预定义 SOP 自动化，精准 CSS 选择器操作，可从 GitHub 安装
+- 🎯 **Skill 系统** — Markdown 知识库 + SOP 操作指南，AI 自主执行，可从 GitHub 安装
+- 🧠 **自主学习** — AI 在使用过程中自动创建和更新 Skill，积累操作经验
 - 🌐 **浏览器操控** — Chrome DevTools Protocol，导航/点击/填表/截图/执行 JS
 - 📱 **屏幕操控** — Android Accessibility Service，跨 App UI 自动化
 - 🎨 **Synthwave 主题** — 霓虹暗色 UI，Material 3
@@ -35,6 +38,7 @@ Tool Call 循环（最多 20 轮）
 | 工具扩展 | 封闭 | 开放，自己写 Skill |
 | 多轮执行 | 单轮 | 最多 20 轮自主 Agent 循环 |
 | 浏览器操控 | ❌ | ✅ CDP 完整操控 |
+| 自主学习 | ❌ | ✅ 自动积累操作经验 |
 | 跨平台 | 单平台 | Android / iOS / macOS / Windows |
 
 ## LLM 支持
@@ -65,97 +69,47 @@ Base URL 可自定义，兼容 LiteLLM、GLM、任何 OpenAI 兼容 API。
 | 🌐 浏览器 (CDP) | ✅ | ✅ | ❌ | ❌ |
 | 📱 屏幕操控 | AppleScript | ❌ | ✅ Accessibility | ❌ |
 | 🎯 Skill 自动化 | ✅ | ✅ | ✅ | ✅ |
-| ⚡ iOS 快捷指令 | ❌ | ❌ | ❌ | stub |
 
 ## Skill 系统
 
-预定义浏览器 SOP 自动化，用 JSON 描述步骤：
-
-```json
-{
-  "name": "google_search",
-  "description": "在 Google 搜索关键词",
-  "params": [{"name": "query", "required": true}],
-  "steps": [
-    {"action": "navigate", "url": "https://www.google.com"},
-    {"action": "wait", "seconds": 1},
-    {"action": "type_text", "selector": "textarea[name=q]", "text": "{{query}}"},
-    {"action": "press_key", "key": "Enter"},
-    {"action": "wait", "seconds": 2},
-    {"action": "query_all", "selector": "h3", "save_as": "results", "limit": 5},
-    {"action": "return", "value": "{{results}}"}
-  ]
-}
-```
-
-Skills 存储在 `~/.pocketagent/skills/`，支持从 GitHub 安装：
+Skill 是 Markdown 格式的知识库和操作指南，AI 读取后自主执行：
 
 ```
-~/.pocketagent/
-├── chrome_profile/     # Chrome 持久化数据（Cookie、登录态）
-└── skills/
-    ├── google_search/
-    │   └── skill.json
-    └── login_admin/
-        └── skill.json
+~/.pocketagent/skills/
+└── shopping_assistant/
+    ├── skill.md              # 角色、策略、上下文
+    ├── search_product.md     # SOP 1：搜索商品
+    └── checkout.md           # SOP 2：结账
 ```
 
-### Skill Step Actions
+**skill.md** 定义 AI 的角色和策略，SOP 文件描述操作步骤和选择器参考。AI 根据当前平台自动选择合适的工具执行——桌面用 CDP 操控浏览器，Android 用 Accessibility 操控 App，未来可用截图+视觉识别。
 
-`navigate` `wait` `query` `query_all` `query_text` `click` `click_text` `type_text` `press_key` `get_text` `execute_js` `save` `return`
+Skill 与工具解耦：同一个 SOP 在不同平台用不同工具执行。
 
-## 架构
+### 自主学习
+
+AI 在使用过程中可以自动：
+- **创建新 Skill** — 当用户反复执行类似操作时，AI 主动提炼为 Skill
+- **更新现有 Skill** — 当 SOP 中的选择器失效或流程变化时，AI 自动修正
+- **积累经验** — 将成功的操作模式保存为可复用的知识
+
+## 数据存储
+
+- **SQLite**（drift）— 聊天记录和操作日志
+- **JSON 文件** — 配置（Agent 配置、LLM 配置）
+- **文件系统** — Skill（Markdown 文件）
 
 ```
-lib/
-├── main.dart
-├── app.dart
-├── models/
-│   └── message.dart
-├── services/
-│   ├── llm_service.dart              # 统一调度 + Agent 循环
-│   ├── llm_config_store.dart         # 每 Provider 独立配置
-│   ├── agent_config.dart             # Agent 人设/语音/语言
-│   ├── chat_store.dart               # 对话持久化
-│   ├── activity_log.dart             # 工具执行日志
-│   ├── tool_registry.dart            # 工具注册 + 开关
-│   ├── cdp_client.dart               # Chrome DevTools Protocol
-│   ├── providers/
-│   │   ├── llm_provider.dart         # 抽象接口
-│   │   ├── openai_provider.dart      # SSE Streaming
-│   │   ├── anthropic_provider.dart   # SSE Streaming
-│   │   ├── bedrock_provider.dart     # AWS Event Stream
-│   │   └── gemini_provider.dart      # SSE Streaming
-│   ├── aws/
-│   │   ├── crc32.dart                # CRC32 校验
-│   │   └── event_stream_decoder.dart # AWS 二进制协议解码
-│   ├── skill/
-│   │   ├── skill_model.dart          # Skill 定义
-│   │   ├── skill_runner.dart         # 步骤执行引擎
-│   │   └── skill_registry.dart       # 加载/安装/管理
-│   └── platform/
-│       ├── termux_bridge.dart        # Android Termux
-│       ├── android_intent_bridge.dart
-│       └── accessibility_bridge.dart # Android 屏幕操控
-├── tools/
-│   ├── base_tool.dart                # Tool 抽象基类
-│   ├── clipboard_tool.dart
-│   ├── camera_tool.dart
-│   ├── gps_tool.dart
-│   ├── calendar_tool.dart
-│   ├── notification_tool.dart
-│   ├── app_launcher_tool.dart
-│   ├── speech_tool.dart
-│   ├── device_info_tool.dart
-│   ├── termux_tool.dart              # Android
-│   ├── screen_control_tool.dart      # Android Accessibility
-│   ├── shortcuts_tool.dart           # iOS
-│   ├── macos_tool.dart               # macOS
-│   ├── windows_tool.dart             # Windows
-│   ├── browser_tool.dart             # CDP
-│   └── skill_tool.dart               # Skill 执行
-└── ui/                               # Synthwave 主题 UI
+~/.pocketagent/           # 桌面端
+  ├── data/
+  │   ├── pocket_agent.db   # SQLite：聊天 + 操作日志
+  │   ├── agent_config.json
+  │   └── llm_config.json
+  ├── skills/               # Markdown 技能
+  └── chrome_profile/       # Chrome 持久化数据
 ```
+
+移动端基础路径为 App 文档目录。
 
 ## 快速开始
 
@@ -178,15 +132,17 @@ flutter run -d macos    # 或 -d windows / -d chrome / 连接手机
 - [x] macOS 互操作（Shell + AppleScript）
 - [x] Windows 互操作（cmd + PowerShell）
 - [x] 浏览器操控（Chrome DevTools Protocol）
-- [x] Skill 系统（预定义 SOP + GitHub 安装）
-- [x] 对话持久化 + 操作日志
+- [x] Markdown Skill 系统
+- [x] SQLite 持久化（drift）
 - [x] Agent 人设配置
 - [x] Synthwave 主题 UI
-- [ ] 流式 TTS（边输出边朗读）
+- [ ] Skill 自主学习（自动创建/更新）
+- [ ] 流式 TTS
 - [ ] iOS Shortcuts 集成
 - [ ] 本地模型支持（llama.cpp / MLC-LLM）
 - [ ] Channel 接入（Feishu / Telegram）
 - [ ] Vision（截图 → LLM 看图理解页面）
+- [ ] 响应式布局（桌面三栏 / 平板双栏 / 手机 Tab）
 
 ## 灵感来源
 
