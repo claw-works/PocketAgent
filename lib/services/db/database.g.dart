@@ -121,6 +121,17 @@ class ChatTopic extends DataClass implements Insertable<ChatTopic> {
     );
   }
 
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return {
+      'id': serializer.toJson<String>(id),
+      'title': serializer.toJson<String>(title),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
   ChatTopic copyWith(
           {String? id,
           String? title,
@@ -381,6 +392,19 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
     );
   }
 
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return {
+      'id': serializer.toJson<String>(id),
+      'topicId': serializer.toJson<String>(topicId),
+      'role': serializer.toJson<String>(role),
+      'content': serializer.toJson<String>(content),
+      'toolName': serializer.toJson<String?>(toolName),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
   ChatMessage copyWith(
           {String? id,
           String? topicId,
@@ -619,6 +643,18 @@ class ActivityEntry extends DataClass implements Insertable<ActivityEntry> {
   }
 
   @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return {
+      'id': serializer.toJson<int>(id),
+      'action': serializer.toJson<String>(action),
+      'detail': serializer.toJson<String>(detail),
+      'success': serializer.toJson<bool>(success),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  @override
   String toString() {
     return (StringBuffer('ActivityEntry(')
           ..write('id: $id, ')
@@ -696,6 +732,8 @@ class _$AppDatabase extends GeneratedDatabase {
   late final $ChatTopicsTable chatTopics = $ChatTopicsTable(this);
   late final $ChatMessagesTable chatMessages = $ChatMessagesTable(this);
   late final $ActivityEntriesTable activityEntries = $ActivityEntriesTable(this);
+  @override
+  int get schemaVersion => 1;
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();

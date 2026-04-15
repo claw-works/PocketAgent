@@ -50,9 +50,6 @@ class AppDatabase extends _$AppDatabase {
     return _instance!;
   }
 
-  @override
-  int get schemaVersion => 1;
-
   // ── Chat Topics ─────────────────────────────────────────
 
   Future<List<ChatTopic>> getAllTopics() {

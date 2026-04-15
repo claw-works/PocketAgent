@@ -44,7 +44,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                       final e = entries[i];
                       // Group by date
                       final showDate = i == 0 ||
-                          !_sameDay(entries[i - 1].time, e.createdAt);
+                          !_sameDay(entries[i - 1].createdAt, e.createdAt);
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

@@ -109,7 +109,6 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
   }
 
   Widget _topicTile(BuildContext context, ChatTopic t) {
-    final lastMsg = t.messages.isNotEmpty ? t.messages.last.content : '暂无消息';
     final timeStr = _formatTime(t.updatedAt);
 
     return Dismissible(
@@ -161,7 +160,7 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(lastMsg,
+                    Text(timeStr,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
