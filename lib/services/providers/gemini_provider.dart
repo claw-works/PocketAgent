@@ -39,7 +39,7 @@ class GeminiProvider implements LlmProvider {
     required List<Map<String, dynamic>> tools,
   }) async {
     final resp = await http.post(
-      Uri.parse('$baseUrl/v1beta/models/$model:generateContent?key=$apiKey'),
+      Uri.parse('$baseUrl/models/$model:generateContent?key=$apiKey'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(_buildBody(systemPrompt: systemPrompt, messages: messages, tools: tools)),
     );
@@ -60,7 +60,7 @@ class GeminiProvider implements LlmProvider {
     // Gemini streaming: streamGenerateContent?alt=sse returns SSE with JSON chunks
     final request = http.Request(
       'POST',
-      Uri.parse('$baseUrl/v1beta/models/$model:streamGenerateContent?alt=sse&key=$apiKey'),
+      Uri.parse('$baseUrl/models/$model:streamGenerateContent?alt=sse&key=$apiKey'),
     )
       ..headers.addAll({'Content-Type': 'application/json'})
       ..body = jsonEncode(_buildBody(systemPrompt: systemPrompt, messages: messages, tools: tools));

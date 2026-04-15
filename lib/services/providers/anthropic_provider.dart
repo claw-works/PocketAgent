@@ -40,7 +40,7 @@ class AnthropicProvider implements LlmProvider {
     required List<Map<String, dynamic>> tools,
   }) async {
     final resp = await http.post(
-      Uri.parse('$baseUrl/v1/messages'),
+      Uri.parse('$baseUrl/messages'),
       headers: _headers(apiKey),
       body: jsonEncode(_body(model: model, systemPrompt: systemPrompt, messages: messages, tools: tools)),
     );
@@ -58,7 +58,7 @@ class AnthropicProvider implements LlmProvider {
     required List<Map<String, dynamic>> tools,
     required void Function(String delta) onDelta,
   }) async {
-    final request = http.Request('POST', Uri.parse('$baseUrl/v1/messages'))
+    final request = http.Request('POST', Uri.parse('$baseUrl/messages'))
       ..headers.addAll(_headers(apiKey))
       ..body = jsonEncode(_body(model: model, systemPrompt: systemPrompt, messages: messages, tools: tools, stream: true));
 

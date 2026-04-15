@@ -30,10 +30,10 @@ class LlmService {
   Future<void> setProvider(String v) => _config.setActiveProvider(v);
 
   static const _defaultBaseUrls = {
-    LlmProviderType.openai: 'https://api.openai.com',
-    LlmProviderType.anthropic: 'https://api.anthropic.com',
+    LlmProviderType.openai: 'https://api.openai.com/v1',
+    LlmProviderType.anthropic: 'https://api.anthropic.com/v1',
     LlmProviderType.bedrock: 'https://bedrock-runtime.us-east-1.amazonaws.com',
-    LlmProviderType.gemini: 'https://generativelanguage.googleapis.com',
+    LlmProviderType.gemini: 'https://generativelanguage.googleapis.com/v1beta',
   };
 
   static const _defaultModels = {

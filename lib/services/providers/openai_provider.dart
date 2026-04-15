@@ -23,7 +23,7 @@ class OpenAiProvider implements LlmProvider {
     });
 
     final resp = await http.post(
-      Uri.parse('$baseUrl/v1/chat/completions'),
+      Uri.parse('$baseUrl/chat/completions'),
       headers: _headers(apiKey),
       body: body,
     );
@@ -55,7 +55,7 @@ class OpenAiProvider implements LlmProvider {
       if (tools.isNotEmpty) 'tools': tools,
     });
 
-    final request = http.Request('POST', Uri.parse('$baseUrl/v1/chat/completions'))
+    final request = http.Request('POST', Uri.parse('$baseUrl/chat/completions'))
       ..headers.addAll(_headers(apiKey))
       ..body = body;
 
