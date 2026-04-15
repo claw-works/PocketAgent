@@ -140,7 +140,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         child: Column(
           children: [
             _header(),
-            Expanded(child: _messageList()),
+            Expanded(child: SelectionArea(child: _messageList())),
             _inputBar(),
           ],
         ),
