@@ -7,13 +7,25 @@ class ToolCall {
   ToolCall({required this.id, required this.name, required this.arguments});
 }
 
+class TokenUsage {
+  final int inputTokens;
+  final int outputTokens;
+  int get totalTokens => inputTokens + outputTokens;
+  const TokenUsage({this.inputTokens = 0, this.outputTokens = 0});
+  TokenUsage operator +(TokenUsage other) => TokenUsage(
+        inputTokens: inputTokens + other.inputTokens,
+        outputTokens: outputTokens + other.outputTokens,
+      );
+  @override
+  String toString() => 'in:$inputTokens out:$outputTokens total:$totalTokens';
+}
+
 /// Unified LLM response — either text content or tool calls.
 class LlmResponse {
   final String? content;
   final List<ToolCall> toolCalls;
-
-  /// Raw assistant message to feed back into conversation (provider-specific).
   final Map<String, dynamic> rawAssistantMessage;
+  final TokenUsage usage;
 
   bool get hasToolCalls => toolCalls.isNotEmpty;
 
@@ -21,6 +33,7 @@ class LlmResponse {
     this.content,
     this.toolCalls = const [],
     required this.rawAssistantMessage,
+    this.usage = const TokenUsage(),
   });
 }
 

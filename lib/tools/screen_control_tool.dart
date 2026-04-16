@@ -10,6 +10,8 @@ class ScreenControlTool extends BaseTool {
 
   @override
   String get description =>
+  @override
+  bool get requiresConfirmation => true;
       '（Android）读取当前屏幕上的 UI 元素，并执行点击、输入、滑动等操作来操控其他 App。'
       '使用前先 read_screen 了解界面结构，再执行操作。';
 

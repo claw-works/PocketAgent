@@ -13,6 +13,8 @@ class BrowserTool extends BaseTool {
 
   @override
   String get description =>
+  @override
+  bool get requiresConfirmation => true;
       '通过 Chrome DevTools Protocol 操控浏览器：导航、读取页面内容、执行 JavaScript、'
       '点击元素、填写表单、截图。首次使用会自动启动 Chrome。';
 

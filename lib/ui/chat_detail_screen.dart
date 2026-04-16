@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message.dart';
 import '../services/llm_service.dart';
+import '../services/providers/llm_provider.dart' show TokenUsage;
 import '../services/tool_registry.dart';
 import '../services/chat_store.dart';
 import '../services/db/database.dart' show ChatTopic;
@@ -29,6 +30,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _loading = false;
   String _streamingContent = '';
   String _statusText = '';
+  String _usageText = '';
   final _toolCalls = <_ToolCallEntry>[];
   final _inputFocus = FocusNode();
 
@@ -36,8 +38,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   void initState() {
     super.initState();
     _tools = ToolRegistry();
+    _tools.onConfirm = _confirmToolExecution;
     _llm = LlmService(tools: _tools);
     _init();
+  }
+
+  Future<bool> _confirmToolExecution(String name, Map<String, dynamic> args) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: PAColors.bgSecondary,
+        title: Text('允许执行 $name？', style: const TextStyle(color: PAColors.textPrimary, fontSize: 16)),
+        content: Text(
+          args.entries.take(3).map((e) => '${e.key}: ${e.value.toString().length > 80 ? '${e.value.toString().substring(0, 80)}...' : e.value}').join('\n'),
+          style: const TextStyle(color: PAColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('拒绝')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('允许', style: TextStyle(color: PAColors.accent)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   Future<void> _init() async {
@@ -103,6 +128,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _loading = true;
       _streamingContent = '';
       _statusText = '';
+      _usageText = '';
       _toolCalls.clear();
     });
     _scrollToBottom();
@@ -134,6 +160,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         );
         await ChatStore.instance.addMessage(_topicId, toolMsg);
         _scrollToBottom();
+      },
+      onUsage: (usage) {
+        setState(() => _usageText = '${usage.totalTokens} tokens');
       },
     );
 
@@ -186,6 +215,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: PAColors.textPrimary)),
           ),
+          if (_usageText.isNotEmpty)
+            Text(_usageText, style: const TextStyle(fontSize: 11, color: PAColors.textMuted)),
         ],
       ),
     );

@@ -63,9 +63,22 @@ class ToolRegistry {
       .map((e) => e.value.toOpenAI())
       .toList();
 
+  /// Callback for confirming dangerous tool execution. Set by UI.
+  /// Returns true to proceed, false to deny.
+  Future<bool> Function(String toolName, Map<String, dynamic> args)? onConfirm;
+
   Future<String> call(String name, Map<String, dynamic> args) async {
     final tool = _tools[name];
     if (tool == null) return '错误: 未知工具 "$name"';
+
+    // Ask for confirmation if required
+    if (tool.requiresConfirmation && onConfirm != null) {
+      final allowed = await onConfirm!(name, args);
+      if (!allowed) {
+        return '{"status":"denied","message":"用户拒绝了此操作"}';
+      }
+    }
+
     try {
       final result = await tool.execute(args);
       ActivityLog.instance.add(

@@ -15,6 +15,7 @@ enum LlmProviderType { openai, anthropic, bedrock, gemini }
 typedef OnDelta = void Function(String delta);
 typedef OnStatus = void Function(String status);
 typedef OnToolCall = void Function(String name, Map<String, dynamic> args, String result, bool success);
+typedef OnUsage = void Function(TokenUsage total);
 
 class LlmService {
   final ToolRegistry tools;
@@ -79,6 +80,7 @@ class LlmService {
     required OnDelta onDelta,
     OnStatus? onStatus,
     OnToolCall? onToolCall,
+    OnUsage? onUsage,
   }) async {
     _cancelled = false;
     final key = apiKey;
@@ -94,6 +96,7 @@ class LlmService {
 
     final messages = history.map((m) => m.toOpenAI()).toList();
     final allContent = StringBuffer();
+    var totalUsage = const TokenUsage();
 
     for (var i = 0; i < maxToolRounds; i++) {
       if (_cancelled) return allContent.isEmpty ? '⏹ 已取消' : allContent.toString();
@@ -120,7 +123,9 @@ class LlmService {
         return '❌ 请求失败: $e';
       }
 
-      debugPrint('[LLM] Round $i: hasToolCalls=${resp.hasToolCalls}, content=${resp.content?.length ?? 0} chars');
+      debugPrint('[LLM] Round $i: hasToolCalls=${resp.hasToolCalls}, content=${resp.content?.length ?? 0} chars, usage=${resp.usage}');
+      totalUsage = totalUsage + resp.usage;
+      onUsage?.call(totalUsage);
 
       if (!resp.hasToolCalls) {
         return allContent.isEmpty ? (resp.content ?? '') : allContent.toString();

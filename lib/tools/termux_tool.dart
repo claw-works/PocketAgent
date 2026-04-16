@@ -9,6 +9,8 @@ class TermuxTool extends BaseTool {
 
   @override
   String get description =>
+  @override
+  bool get requiresConfirmation => true;
       '（Android）通过 Termux 执行 Linux shell 命令。需要设备已安装 Termux 并授予 RUN_COMMAND 权限。'
       '可执行任意 bash 命令，包括 python、node、curl、git 等 Termux 中已安装的工具。';
 

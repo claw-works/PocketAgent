@@ -7,6 +7,9 @@ abstract class BaseTool {
   /// JSON Schema for parameters, used in OpenAI tools definition.
   Map<String, dynamic> get parameters;
 
+  /// Whether this tool requires user confirmation before execution.
+  bool get requiresConfirmation => false;
+
   /// Execute the tool with given arguments, return result string.
   Future<String> execute(Map<String, dynamic> args);
 

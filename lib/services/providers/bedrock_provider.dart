@@ -176,7 +176,13 @@ class BedrockProvider implements LlmProvider {
         toolCalls.add(ToolCall(id: tu['toolUseId'], name: tu['name'], arguments: Map<String, dynamic>.from(tu['input'])));
       }
     }
-    return LlmResponse(content: textContent, toolCalls: toolCalls, rawAssistantMessage: {'role': 'assistant', 'content': contentBlocks});
+    return LlmResponse(content: textContent, toolCalls: toolCalls, rawAssistantMessage: {'role': 'assistant', 'content': contentBlocks},
+      usage: _parseUsage(data['usage']));
+  }
+
+  static TokenUsage _parseUsage(Map<String, dynamic>? u) {
+    if (u == null) return const TokenUsage();
+    return TokenUsage(inputTokens: u['inputTokens'] as int? ?? 0, outputTokens: u['outputTokens'] as int? ?? 0);
   }
 
   Map<String, dynamic>? _convertMessage(Map<String, dynamic> msg) {

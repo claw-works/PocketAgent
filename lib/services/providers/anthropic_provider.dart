@@ -135,7 +135,13 @@ class AnthropicProvider implements LlmProvider {
         toolCalls.add(ToolCall(id: block['id'], name: block['name'], arguments: Map<String, dynamic>.from(block['input'])));
       }
     }
-    return LlmResponse(content: textContent, toolCalls: toolCalls, rawAssistantMessage: {'role': 'assistant', 'content': content});
+    return LlmResponse(content: textContent, toolCalls: toolCalls, rawAssistantMessage: {'role': 'assistant', 'content': content},
+      usage: _parseUsage(data['usage']));
+  }
+
+  static TokenUsage _parseUsage(Map<String, dynamic>? u) {
+    if (u == null) return const TokenUsage();
+    return TokenUsage(inputTokens: u['input_tokens'] as int? ?? 0, outputTokens: u['output_tokens'] as int? ?? 0);
   }
 
   Map<String, dynamic> _convertMessage(Map<String, dynamic> msg) {

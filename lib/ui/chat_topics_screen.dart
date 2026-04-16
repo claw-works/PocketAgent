@@ -12,6 +12,8 @@ class ChatTopicsScreen extends StatefulWidget {
 }
 
 class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
@@ -29,14 +31,44 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
   @override
   Widget build(BuildContext context) {
     final topics = ChatStore.instance.topics;
+    final filtered = _searchQuery.isEmpty
+        ? topics
+        : topics.where((t) => t.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     return SafeArea(
       child: Column(
         children: [
           _header(context),
+          _searchBar(),
           Expanded(
-            child: topics.isEmpty ? _empty() : _list(context, topics),
+            child: filtered.isEmpty ? _empty() : _list(context, filtered),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _searchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: PAColors.bgSecondary,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: PAColors.border),
+        ),
+        child: TextField(
+          onChanged: (v) => setState(() => _searchQuery = v),
+          style: const TextStyle(fontSize: 14, color: PAColors.textPrimary),
+          decoration: const InputDecoration(
+            icon: Icon(Icons.search, size: 18, color: PAColors.textMuted),
+            hintText: '搜索对话...',
+            hintStyle: TextStyle(color: PAColors.textMuted, fontSize: 14),
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(vertical: 10),
+          ),
+        ),
       ),
     );
   }

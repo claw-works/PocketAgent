@@ -140,6 +140,7 @@ class OpenAiProvider implements LlmProvider {
 
   LlmResponse _parseResponse(Map<String, dynamic> data) {
     final msg = data['choices'][0]['message'];
+    final usage = _parseUsage(data['usage']);
     final calls = (msg['tool_calls'] as List?)
             ?.map((tc) => ToolCall(
                   id: tc['id'],
@@ -152,6 +153,15 @@ class OpenAiProvider implements LlmProvider {
       content: msg['content'],
       toolCalls: calls,
       rawAssistantMessage: Map<String, dynamic>.from(msg),
+      usage: usage,
+    );
+  }
+
+  static TokenUsage _parseUsage(Map<String, dynamic>? u) {
+    if (u == null) return const TokenUsage();
+    return TokenUsage(
+      inputTokens: u['prompt_tokens'] as int? ?? 0,
+      outputTokens: u['completion_tokens'] as int? ?? 0,
     );
   }
 }
