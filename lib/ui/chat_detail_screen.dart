@@ -5,6 +5,7 @@ import '../models/message.dart';
 import '../services/llm_service.dart';
 import '../services/tool_registry.dart';
 import '../services/chat_store.dart';
+import '../services/db/database.dart' show ChatTopic;
 import 'theme.dart';
 import 'widgets/message_bubble.dart';
 
@@ -28,6 +29,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   bool _loading = false;
   String _streamingContent = '';
   String _statusText = '';
+  final _toolCalls = <_ToolCallEntry>[];
   final _inputFocus = FocusNode();
 
   @override
@@ -49,7 +51,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _topicTitle = topic.title;
     }
     await _loadMessages();
-    // Watch for changes
     ChatStore.instance.watchMessages(_topicId).listen((dbMsgs) {
       if (!mounted) return;
       setState(() {
@@ -58,9 +59,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           role: MessageRole.values.byName(m.role),
           content: m.content,
           toolName: m.toolName,
+          toolCallId: m.toolCallId,
           timestamp: m.createdAt,
         )).toList();
-        // Update title
         final topics = ChatStore.instance.topics;
         final t = topics.where((t) => t.id == _topicId).firstOrNull;
         if (t != null) _topicTitle = t.title;
@@ -76,6 +77,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         role: MessageRole.values.byName(m.role),
         content: m.content,
         toolName: m.toolName,
+        toolCallId: m.toolCallId,
         timestamp: m.createdAt,
       )).toList();
     });
@@ -85,8 +87,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut);
+            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
       }
     });
   }
@@ -102,6 +103,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _loading = true;
       _streamingContent = '';
       _statusText = '';
+      _toolCalls.clear();
     });
     _scrollToBottom();
 
@@ -116,21 +118,42 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       },
       onStatus: (status) {
         setState(() => _statusText = status);
+        _scrollToBottom();
+      },
+      onToolCall: (name, args, result, success) async {
+        setState(() {
+          _toolCalls.add(_ToolCallEntry(name: name, args: args, result: result, success: success));
+        });
+        // Persist tool call as a tool message
+        final toolMsg = Message(
+          id: _uuid.v4(),
+          role: MessageRole.tool,
+          content: result,
+          toolName: name,
+          toolCallId: name,
+        );
+        await ChatStore.instance.addMessage(_topicId, toolMsg);
+        _scrollToBottom();
       },
     );
 
-    // Use streaming content if reply is an error but we already got text
-    final finalContent = (reply.startsWith('❌') && _streamingContent.isNotEmpty)
-        ? _streamingContent
-        : reply;
-
-    final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: finalContent);
+    // Save final assistant reply
+    final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: reply);
     await ChatStore.instance.addMessage(_topicId, assistantMsg);
     setState(() {
       _loading = false;
       _streamingContent = '';
+      _statusText = '';
     });
     _scrollToBottom();
+  }
+
+  void _cancel() {
+    _llm.cancel();
+    setState(() {
+      _loading = false;
+      _statusText = '';
+    });
   }
 
   @override
@@ -160,10 +183,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(_topicTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.w700, color: PAColors.textPrimary)),
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: PAColors.textPrimary)),
           ),
         ],
       ),
@@ -171,64 +192,116 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _messageList() {
-    final msgCount = _messages.length;
-    final hasStreaming = _loading && _streamingContent.isNotEmpty;
-    final hasStatus = _loading && _statusText.isNotEmpty;
-    final showSpinner = _loading && _streamingContent.isEmpty && _statusText.isEmpty;
-    final extraItems = (hasStreaming ? 1 : 0) + (hasStatus ? 1 : 0) + (showSpinner ? 1 : 0);
-    final totalCount = msgCount + extraItems;
+    final items = <Widget>[];
 
-    if (msgCount == 0 && !_loading) {
-      return const Center(
-        child: Text('👋 说点什么吧', style: TextStyle(fontSize: 18, color: PAColors.textSecondary)),
-      );
+    // Persisted messages
+    for (final m in _messages) {
+      if (m.role == MessageRole.tool) {
+        items.add(_toolResultBubble(m));
+      } else {
+        items.add(MessageBubble(message: m));
+      }
+    }
+
+    // Streaming content
+    if (_loading && _streamingContent.isNotEmpty) {
+      items.add(MessageBubble(
+        message: Message(id: 'streaming', role: MessageRole.assistant, content: _streamingContent),
+      ));
+    }
+
+    // Tool calls in progress
+    for (final tc in _toolCalls) {
+      items.add(_toolCallBubble(tc));
+    }
+
+    // Status
+    if (_loading && _statusText.isNotEmpty) {
+      items.add(Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        child: Row(children: [
+          const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: PAColors.accentCyan)),
+          const SizedBox(width: 8),
+          Text(_statusText, style: const TextStyle(fontSize: 13, color: PAColors.accentCyan)),
+        ]),
+      ));
+    }
+
+    // Initial spinner
+    if (_loading && _streamingContent.isEmpty && _statusText.isEmpty && _toolCalls.isEmpty) {
+      items.add(const Padding(
+        padding: EdgeInsets.all(8),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: PAColors.accent)),
+          SizedBox(width: 8),
+          Text('思考中...', style: TextStyle(color: PAColors.textSecondary)),
+        ]),
+      ));
+    }
+
+    if (items.isEmpty) {
+      return const Center(child: Text('👋 说点什么吧', style: TextStyle(fontSize: 18, color: PAColors.textSecondary)));
     }
 
     return ListView.builder(
       controller: _scrollCtrl,
       padding: const EdgeInsets.all(16),
-      itemCount: totalCount,
-      itemBuilder: (_, i) {
-        if (i < msgCount) {
-          return MessageBubble(message: _messages[i]);
-        }
-        final extra = i - msgCount;
-        // Streaming bubble
-        if (hasStreaming && extra == 0) {
-          return MessageBubble(
-            message: Message(
-              id: 'streaming',
-              role: MessageRole.assistant,
-              content: _streamingContent,
+      itemCount: items.length,
+      itemBuilder: (_, i) => items[i],
+    );
+  }
+
+  Widget _toolCallBubble(_ToolCallEntry tc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: PAColors.bgTertiary,
+          borderRadius: BorderRadius.circular(PARadius.sm),
+          border: Border.all(color: PAColors.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(tc.success ? Icons.check_circle : Icons.error, size: 14,
+                color: tc.success ? PAColors.success : PAColors.accent),
+            const SizedBox(width: 6),
+            Text('🔧 ${tc.name}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: PAColors.accentCyan)),
+          ]),
+          if (tc.result.length <= 200)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(tc.result, style: const TextStyle(fontSize: 11, color: PAColors.textMuted), maxLines: 3, overflow: TextOverflow.ellipsis),
             ),
-          );
-        }
-        // Status indicator (tool executing / thinking)
-        if (hasStatus) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            child: Row(
-              children: [
-                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: PAColors.accentCyan)),
-                const SizedBox(width: 8),
-                Text(_statusText, style: const TextStyle(fontSize: 13, color: PAColors.accentCyan)),
-              ],
+          if (tc.result.length > 200)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('${tc.result.substring(0, 200)}...', style: const TextStyle(fontSize: 11, color: PAColors.textMuted)),
             ),
-          );
-        }
-        // Initial loading spinner
-        return const Padding(
-          padding: EdgeInsets.all(8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: PAColors.accent)),
-              SizedBox(width: 8),
-              Text('思考中...', style: TextStyle(color: PAColors.textSecondary)),
-            ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _toolResultBubble(Message m) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: PAColors.bgTertiary,
+          borderRadius: BorderRadius.circular(PARadius.sm),
+          border: Border.all(color: PAColors.border),
+        ),
+        child: Row(children: [
+          const Icon(Icons.build_outlined, size: 14, color: PAColors.accentCyan),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text('🔧 ${m.toolName ?? "tool"}: ${m.content.length > 100 ? "${m.content.substring(0, 100)}..." : m.content}',
+                style: const TextStyle(fontSize: 12, color: PAColors.textMuted)),
           ),
-        );
-      },
+        ]),
+      ),
     );
   }
 
@@ -239,16 +312,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // Cancel or mic button
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: PAColors.bgTertiary,
-                borderRadius: BorderRadius.circular(21),
+            child: GestureDetector(
+              onTap: _loading ? _cancel : null,
+              child: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(
+                  color: _loading ? PAColors.accent : PAColors.bgTertiary,
+                  borderRadius: BorderRadius.circular(21),
+                ),
+                child: Icon(_loading ? Icons.stop : Icons.mic, size: 20,
+                    color: _loading ? Colors.white : PAColors.textPrimary),
               ),
-              child: const Icon(Icons.mic, size: 20, color: PAColors.textPrimary),
             ),
           ),
           const SizedBox(width: 10),
@@ -290,8 +367,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             child: GestureDetector(
               onTap: _send,
               child: Container(
-                width: 42,
-                height: 42,
+                width: 42, height: 42,
                 decoration: BoxDecoration(
                   gradient: PAColors.gradientAccent,
                   borderRadius: BorderRadius.circular(21),
@@ -312,4 +388,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _inputFocus.dispose();
     super.dispose();
   }
+}
+
+class _ToolCallEntry {
+  final String name;
+  final Map<String, dynamic> args;
+  final String result;
+  final bool success;
+  _ToolCallEntry({required this.name, required this.args, required this.result, required this.success});
 }

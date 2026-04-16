@@ -24,6 +24,7 @@ class ChatMessages extends Table {
   TextColumn get role => text()(); // user, assistant, system, tool
   TextColumn get content => text()();
   TextColumn get toolName => text().nullable()();
+  TextColumn get toolCallId => text().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   @override
@@ -49,6 +50,16 @@ class AppDatabase extends _$AppDatabase {
     _instance ??= AppDatabase._();
     return _instance!;
   }
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (m) => m.createAll(),
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            await m.addColumn(chatMessages, chatMessages.toolCallId);
+          }
+        },
+      );
 
   // ── Chat Topics ─────────────────────────────────────────
 

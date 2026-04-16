@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'pa_paths.dart';
 
 /// Chrome DevTools Protocol client over WebSocket.
@@ -53,7 +54,7 @@ class CdpClient {
 
       final wsUrl = page['webSocketDebuggerUrl'] as String;
       _ws = await WebSocket.connect(wsUrl);
-      _ws!.listen(_onMessage, onDone: () => _ws = null);
+      _ws!.listen(_onMessage, onDone: _onDone, onError: _onError);
       return true;
     } catch (_) {
       return false;
@@ -97,6 +98,19 @@ class CdpClient {
     if (id != null && _pending.containsKey(id)) {
       _pending.remove(id)!.complete(msg);
     }
+  }
+
+  void _onDone() {
+    _ws = null;
+    // Complete all pending with error to prevent hanging
+    for (final c in _pending.values) {
+      c.completeError(Exception('CDP connection closed'));
+    }
+    _pending.clear();
+  }
+
+  void _onError(Object error) {
+    debugPrint('[CDP] WebSocket error: $error');
   }
 
   /// Send a CDP command and wait for result.

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'base_tool.dart';
 
 /// 🔔 本地通知
@@ -25,6 +26,9 @@ class NotificationTool extends BaseTool {
 
   @override
   Future<String> execute(Map<String, dynamic> args) async {
+    if (!(Platform.isAndroid || Platform.isIOS)) {
+      return jsonEncode({'status': 'unavailable', 'message': '此功能在当前平台不可用（需要移动设备）'});
+    }
     // TODO: integrate flutter_local_notifications
     final delay = args['delay_seconds'] ?? 0;
     return jsonEncode({

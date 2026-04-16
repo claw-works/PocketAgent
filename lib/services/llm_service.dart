@@ -11,13 +11,18 @@ import 'providers/gemini_provider.dart';
 
 enum LlmProviderType { openai, anthropic, bedrock, gemini }
 
+/// Callback types for streaming chat.
+typedef OnDelta = void Function(String delta);
+typedef OnStatus = void Function(String status);
+typedef OnToolCall = void Function(String name, Map<String, dynamic> args, String result, bool success);
+
 class LlmService {
   final ToolRegistry tools;
+  bool _cancelled = false;
 
   LlmService({required this.tools});
 
   int get maxToolRounds => AgentConfig.instance.maxToolRounds;
-
   LlmConfigStore get _config => LlmConfigStore.instance;
 
   String? get apiKey => _config.apiKey;
@@ -62,15 +67,20 @@ class LlmService {
     }
   }
 
+  void cancel() => _cancelled = true;
+
   Future<String> chat(List<Message> history) async {
     return streamChat(history, onDelta: (_) {});
   }
 
+  /// Full streaming chat with tool call visibility and cancel support.
   Future<String> streamChat(
     List<Message> history, {
-    required void Function(String delta) onDelta,
-    void Function(String status)? onStatus,
+    required OnDelta onDelta,
+    OnStatus? onStatus,
+    OnToolCall? onToolCall,
   }) async {
+    _cancelled = false;
     final key = apiKey;
     if (key == null || key.isEmpty) return '⚠️ 请先在设置中配置 API Key';
 
@@ -80,61 +90,62 @@ class LlmService {
     final modelName = model ?? _defaultModels[type]!;
     final systemPrompt = AgentConfig.instance.systemPrompt;
 
-    debugPrint('[LLM] provider=$type model=$modelName base=$base');
+    debugPrint('[LLM] provider=$type model=$modelName');
 
     final messages = history.map((m) => m.toOpenAI()).toList();
+    final allContent = StringBuffer();
 
     for (var i = 0; i < maxToolRounds; i++) {
+      if (_cancelled) return allContent.isEmpty ? '⏹ 已取消' : allContent.toString();
+
       final LlmResponse resp;
-      final isFirstRound = i == 0;
       try {
-        if (isFirstRound) {
-          resp = await provider.stream(
-            apiKey: key,
-            baseUrl: base,
-            model: modelName,
-            systemPrompt: systemPrompt,
-            messages: messages,
-            tools: tools.toOpenAI(),
-            onDelta: onDelta,
-          );
-        } else {
-          resp = await provider.call(
-            apiKey: key,
-            baseUrl: base,
-            model: modelName,
-            systemPrompt: systemPrompt,
-            messages: messages,
-            tools: tools.toOpenAI(),
-          );
-        }
+        // Stream every round
+        resp = await provider.stream(
+          apiKey: key,
+          baseUrl: base,
+          model: modelName,
+          systemPrompt: systemPrompt,
+          messages: messages,
+          tools: tools.toOpenAI(),
+          onDelta: (delta) {
+            allContent.write(delta);
+            onDelta(delta);
+          },
+        );
       } catch (e, st) {
         debugPrint('[LLM] ❌ Error (round $i): $e');
         debugPrint('[LLM] StackTrace: $st');
+        if (allContent.isNotEmpty) return allContent.toString();
         return '❌ 请求失败: $e';
       }
 
       debugPrint('[LLM] Round $i: hasToolCalls=${resp.hasToolCalls}, content=${resp.content?.length ?? 0} chars');
 
       if (!resp.hasToolCalls) {
-        if (!isFirstRound && resp.content != null) {
-          onStatus?.call('');
-          onDelta(resp.content!);
-        }
-        return resp.content ?? '';
+        return allContent.isEmpty ? (resp.content ?? '') : allContent.toString();
       }
 
+      // Process tool calls
       messages.add(resp.rawAssistantMessage);
       for (final tc in resp.toolCalls) {
-        debugPrint('[LLM] Tool call: ${tc.name}(${tc.arguments})');
-        onStatus?.call('🔧 正在执行: ${tc.name}');
+        if (_cancelled) return allContent.toString();
+
+        debugPrint('[LLM] Tool call: ${tc.name}');
+        onStatus?.call('🔧 ${tc.name}');
+
         final result = await tools.call(tc.name, tc.arguments);
-        debugPrint('[LLM] Tool result: ${result.length} chars');
+        final success = !result.contains('"status":"error"');
+        debugPrint('[LLM] Tool result: ${result.length} chars, success=$success');
+
+        onToolCall?.call(tc.name, tc.arguments, result, success);
         messages.add(provider.buildToolResultMessage(toolCall: tc, result: result));
       }
-      onStatus?.call('🤔 正在思考...');
+      onStatus?.call('🤔 思考中...');
     }
 
-    return '⚠️ 工具调用轮次过多（$maxToolRounds），已中止';
+    return allContent.isEmpty
+        ? '⚠️ 工具调用轮次过多（$maxToolRounds），已中止'
+        : allContent.toString();
   }
 }

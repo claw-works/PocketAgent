@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'base_tool.dart';
 
 /// 📅 日历 / 提醒事项读写
@@ -29,6 +30,9 @@ class CalendarTool extends BaseTool {
 
   @override
   Future<String> execute(Map<String, dynamic> args) async {
+    if (!(Platform.isAndroid || Platform.isIOS)) {
+      return jsonEncode({'status': 'unavailable', 'message': '此功能在当前平台不可用（需要移动设备）'});
+    }
     final action = args['action'] as String;
     // TODO: integrate device_calendar plugin
     switch (action) {

@@ -53,6 +53,7 @@ class ChatStore extends ChangeNotifier {
       role: message.role.name,
       content: message.content,
       toolName: Value(message.toolName),
+      toolCallId: Value(message.toolCallId),
     ));
 
     // Auto-title from first user message

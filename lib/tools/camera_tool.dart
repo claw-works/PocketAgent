@@ -1,5 +1,8 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'base_tool.dart';
+
+bool get _isRealPlatform => Platform.isAndroid || Platform.isIOS;
 
 /// 📷 拍照 / 读取照片库 / 图像分析
 class CameraTool extends BaseTool {
@@ -26,6 +29,9 @@ class CameraTool extends BaseTool {
   Future<String> execute(Map<String, dynamic> args) async {
     final action = args['action'] as String;
     // TODO: integrate image_picker + camera plugin
+    if (!_isRealPlatform) {
+      return jsonEncode({'status': 'unavailable', 'message': '相机功能在当前平台不可用（需要真机）'});
+    }
     switch (action) {
       case 'capture':
         return jsonEncode({'status': 'ok', 'path': '/tmp/photo_stub.jpg', 'message': '已拍照（stub）'});

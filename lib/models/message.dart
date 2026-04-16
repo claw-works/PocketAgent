@@ -6,6 +6,7 @@ class Message {
   final String content;
   final DateTime timestamp;
   final String? toolName;
+  final String? toolCallId;
 
   Message({
     required this.id,
@@ -13,6 +14,7 @@ class Message {
     required this.content,
     DateTime? timestamp,
     this.toolName,
+    this.toolCallId,
   }) : timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toOpenAI() {
@@ -20,6 +22,8 @@ class Message {
       'role': role == MessageRole.tool ? 'tool' : role.name,
       'content': content,
       if (toolName != null) 'name': toolName,
+      if (toolCallId != null && role == MessageRole.tool)
+        'tool_call_id': toolCallId,
     };
   }
 }

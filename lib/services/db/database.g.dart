@@ -269,6 +269,11 @@ class $ChatMessagesTable extends ChatMessages
   late final GeneratedColumn<String> toolName = GeneratedColumn<String>(
       'tool_name', aliasedName, true,
       type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _toolCallIdMeta = VerificationMeta('toolCallId');
+  @override
+  late final GeneratedColumn<String> toolCallId = GeneratedColumn<String>(
+      'tool_call_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta = VerificationMeta('createdAt');
   @override
   late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
@@ -279,7 +284,7 @@ class $ChatMessagesTable extends ChatMessages
 
   @override
   List<GeneratedColumn> get $columns =>
-      [id, topicId, role, content, toolName, createdAt];
+      [id, topicId, role, content, toolName, toolCallId, createdAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -317,6 +322,10 @@ class $ChatMessagesTable extends ChatMessages
       context.handle(_toolNameMeta,
           toolName.isAcceptableOrUnknown(data['tool_name']!, _toolNameMeta));
     }
+    if (data.containsKey('tool_call_id')) {
+      context.handle(_toolCallIdMeta,
+          toolCallId.isAcceptableOrUnknown(data['tool_call_id']!, _toolCallIdMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -340,6 +349,8 @@ class $ChatMessagesTable extends ChatMessages
           .read(DriftSqlType.string, data['${effectivePrefix}content'])!,
       toolName: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}tool_name']),
+      toolCallId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}tool_call_id']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -357,6 +368,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
   final String role;
   final String content;
   final String? toolName;
+  final String? toolCallId;
   final DateTime createdAt;
   const ChatMessage(
       {required this.id,
@@ -364,6 +376,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
       required this.role,
       required this.content,
       this.toolName,
+      this.toolCallId,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -374,6 +387,9 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
     map['content'] = Variable<String>(content);
     if (!nullToAbsent || toolName != null) {
       map['tool_name'] = Variable<String>(toolName);
+    }
+    if (!nullToAbsent || toolCallId != null) {
+      map['tool_call_id'] = Variable<String>(toolCallId);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -388,6 +404,9 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
       toolName: toolName == null && nullToAbsent
           ? const Value.absent()
           : Value(toolName),
+      toolCallId: toolCallId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(toolCallId),
       createdAt: Value(createdAt),
     );
   }
@@ -401,6 +420,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
       'role': serializer.toJson<String>(role),
       'content': serializer.toJson<String>(content),
       'toolName': serializer.toJson<String?>(toolName),
+      'toolCallId': serializer.toJson<String?>(toolCallId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -411,6 +431,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
           String? role,
           String? content,
           Value<String?> toolName = const Value.absent(),
+          Value<String?> toolCallId = const Value.absent(),
           DateTime? createdAt}) =>
       ChatMessage(
         id: id ?? this.id,
@@ -418,6 +439,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
         role: role ?? this.role,
         content: content ?? this.content,
         toolName: toolName.present ? toolName.value : this.toolName,
+        toolCallId: toolCallId.present ? toolCallId.value : this.toolCallId,
         createdAt: createdAt ?? this.createdAt,
       );
   @override
@@ -428,6 +450,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
           ..write('role: $role, ')
           ..write('content: $content, ')
           ..write('toolName: $toolName, ')
+          ..write('toolCallId: $toolCallId, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -435,7 +458,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
 
   @override
   int get hashCode =>
-      Object.hash(id, topicId, role, content, toolName, createdAt);
+      Object.hash(id, topicId, role, content, toolName, toolCallId, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -445,6 +468,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
           other.role == role &&
           other.content == content &&
           other.toolName == toolName &&
+          other.toolCallId == toolCallId &&
           other.createdAt == createdAt);
 }
 
@@ -454,6 +478,7 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
   final Value<String> role;
   final Value<String> content;
   final Value<String?> toolName;
+  final Value<String?> toolCallId;
   final Value<DateTime> createdAt;
   const ChatMessagesCompanion({
     this.id = const Value.absent(),
@@ -461,6 +486,7 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
     this.role = const Value.absent(),
     this.content = const Value.absent(),
     this.toolName = const Value.absent(),
+    this.toolCallId = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   ChatMessagesCompanion.insert({
@@ -469,6 +495,7 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
     required String role,
     required String content,
     this.toolName = const Value.absent(),
+    this.toolCallId = const Value.absent(),
     this.createdAt = const Value.absent(),
   })  : id = Value(id),
         topicId = Value(topicId),
@@ -483,6 +510,7 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
     if (role.present) map['role'] = Variable<String>(role.value);
     if (content.present) map['content'] = Variable<String>(content.value);
     if (toolName.present) map['tool_name'] = Variable<String>(toolName.value);
+    if (toolCallId.present) map['tool_call_id'] = Variable<String>(toolCallId.value);
     if (createdAt.present) map['created_at'] = Variable<DateTime>(createdAt.value);
     return map;
   }
@@ -733,7 +761,7 @@ class _$AppDatabase extends GeneratedDatabase {
   late final $ChatMessagesTable chatMessages = $ChatMessagesTable(this);
   late final $ActivityEntriesTable activityEntries = $ActivityEntriesTable(this);
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
