@@ -16,7 +16,8 @@ class AgentConfig extends ChangeNotifier {
   double _voiceSpeed = 1.0;
   String _language = '简体中文';
   String _chatLanguage = '自动检测';
-  int _maxToolRounds = 20;
+  int _maxToolRounds = 50;
+  bool _autoApproveTool = false;
 
   String get name => _name;
   String get persona => _persona;
@@ -25,6 +26,7 @@ class AgentConfig extends ChangeNotifier {
   String get language => _language;
   String get chatLanguage => _chatLanguage;
   int get maxToolRounds => _maxToolRounds;
+  bool get autoApproveTool => _autoApproveTool;
 
   String get systemPrompt {
     final base = '你是 $_name，一个运行在用户设备上的私人 AI 助手。'
@@ -54,6 +56,7 @@ class AgentConfig extends ChangeNotifier {
       _language = data['language'] ?? _language;
       _chatLanguage = data['chatLanguage'] ?? _chatLanguage;
       _maxToolRounds = data['maxToolRounds'] as int? ?? _maxToolRounds;
+      _autoApproveTool = data['autoApproveTool'] as bool? ?? _autoApproveTool;
     }
   }
 
@@ -66,6 +69,7 @@ class AgentConfig extends ChangeNotifier {
       'language': _language,
       'chatLanguage': _chatLanguage,
       'maxToolRounds': _maxToolRounds,
+      'autoApproveTool': _autoApproveTool,
     });
     notifyListeners();
   }
@@ -77,4 +81,5 @@ class AgentConfig extends ChangeNotifier {
   Future<void> setLanguage(String v) async { _language = v; await _save(); }
   Future<void> setChatLanguage(String v) async { _chatLanguage = v; await _save(); }
   Future<void> setMaxToolRounds(int v) async { _maxToolRounds = v; await _save(); }
+  Future<void> setAutoApproveTool(bool v) async { _autoApproveTool = v; await _save(); }
 }

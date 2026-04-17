@@ -62,10 +62,18 @@ class _GeneralScreenState extends State<GeneralScreen> {
         value: '${c.maxToolRounds} 次',
         onTap: () => _pickOption(
           title: '最大工具调用轮次',
-          options: ['5', '10', '20', '30', '50'],
+          options: ['10', '20', '50', '100', '200', '500'],
           current: '${c.maxToolRounds}',
           onSelect: (v) => c.setMaxToolRounds(int.parse(v)),
         ),
+      ),
+      const SizedBox(height: 8),
+      _toggleItem(
+        icon: Icons.security,
+        label: '自动批准工具执行',
+        value: '跳过危险工具的确认弹窗',
+        enabled: c.autoApproveTool,
+        onChanged: (v) => c.setAutoApproveTool(v),
       ),
       const SizedBox(height: 24),
       _section('主题'),
@@ -85,6 +93,36 @@ class _GeneralScreenState extends State<GeneralScreen> {
         padding: const EdgeInsets.only(bottom: 12),
         child: Text(t, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: PAColors.textMuted, letterSpacing: 1)),
       );
+
+  Widget _toggleItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool enabled,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: PAColors.bgSecondary,
+        borderRadius: BorderRadius.circular(PARadius.md),
+      ),
+      child: Row(children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(gradient: PAColors.gradientAccent, borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, size: 18, color: Colors.white),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: PAColors.textPrimary)),
+          const SizedBox(height: 2),
+          Text(value, style: const TextStyle(fontSize: 13, color: PAColors.textSecondary)),
+        ])),
+        Switch(value: enabled, activeColor: PAColors.accent, onChanged: (v) { onChanged(v); setState(() {}); }),
+      ]),
+    );
+  }
 
   void _pickOption({
     required String title,
