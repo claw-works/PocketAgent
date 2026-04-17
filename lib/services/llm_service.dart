@@ -138,7 +138,9 @@ class LlmService {
 
       // Process tool calls
       messages.add(resp.rawAssistantMessage);
-      debugPrint('[LLM] rawAssistantMessage: ${resp.rawAssistantMessage}');
+      // Collect all tool results for this round, then add as one message
+      // (Bedrock requires all toolResults in a single user message)
+      final toolResults = <Map<String, dynamic>>[];
       for (final tc in resp.toolCalls) {
         if (_cancelled) return allContent.toString();
 
@@ -150,9 +152,22 @@ class LlmService {
         debugPrint('[LLM] Tool result: ${result.length} chars, success=$success');
 
         onToolCall?.call(tc.name, tc.arguments, result, success);
-        final toolResultMsg = provider.buildToolResultMessage(toolCall: tc, result: result);
-        debugPrint('[LLM] toolResultMsg: $toolResultMsg');
-        messages.add(toolResultMsg);
+        toolResults.add(provider.buildToolResultMessage(toolCall: tc, result: result));
+      }
+      // Merge tool results: if multiple, combine content arrays into one message
+      if (toolResults.length == 1) {
+        messages.add(toolResults.first);
+      } else if (toolResults.isNotEmpty) {
+        final mergedContent = <dynamic>[];
+        for (final tr in toolResults) {
+          final c = tr['content'];
+          if (c is List) {
+            mergedContent.addAll(c);
+          } else {
+            mergedContent.add({'text': c?.toString() ?? ''});
+          }
+        }
+        messages.add({'role': toolResults.first['role'], 'content': mergedContent});
       }
       onStatus?.call('🤔 思考中...');
     }
