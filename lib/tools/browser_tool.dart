@@ -17,9 +17,9 @@ class BrowserTool extends BaseTool {
       '点击元素、填写表单、截图。首次使用会自动启动 Chrome。';
 
   @override
-  @override
   bool get requiresConfirmation => true;
 
+  @override
   Map<String, dynamic> get parameters => {
         'type': 'object',
         'properties': {

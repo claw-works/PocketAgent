@@ -13,9 +13,9 @@ class TermuxTool extends BaseTool {
       '可执行任意 bash 命令，包括 python、node、curl、git 等 Termux 中已安装的工具。';
 
   @override
-  @override
   bool get requiresConfirmation => true;
 
+  @override
   Map<String, dynamic> get parameters => {
         'type': 'object',
         'properties': {

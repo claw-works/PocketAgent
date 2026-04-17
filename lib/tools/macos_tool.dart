@@ -13,9 +13,9 @@ class MacOsTool extends BaseTool {
       '（macOS）执行 shell 命令、打开应用程序、或运行 AppleScript';
 
   @override
-  @override
   bool get requiresConfirmation => true;
 
+  @override
   Map<String, dynamic> get parameters => {
         'type': 'object',
         'properties': {

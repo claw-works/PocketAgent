@@ -17,6 +17,7 @@ class ScreenControlTool extends BaseTool {
   @override
   bool get requiresConfirmation => true;
 
+  @override
   Map<String, dynamic> get parameters => {
         'type': 'object',
         'properties': {

@@ -13,9 +13,9 @@ class WindowsTool extends BaseTool {
       '（Windows）执行 PowerShell 命令、打开应用程序';
 
   @override
-  @override
   bool get requiresConfirmation => true;
 
+  @override
   Map<String, dynamic> get parameters => {
         'type': 'object',
         'properties': {
