@@ -138,18 +138,21 @@ class LlmService {
 
       // Process tool calls
       messages.add(resp.rawAssistantMessage);
+      debugPrint('[LLM] rawAssistantMessage: ${resp.rawAssistantMessage}');
       for (final tc in resp.toolCalls) {
         if (_cancelled) return allContent.toString();
 
-        debugPrint('[LLM] Tool call: ${tc.name}');
+        debugPrint('[LLM] Tool call: ${tc.name} id=${tc.id}');
         onStatus?.call('🔧 ${tc.name}');
 
         final result = await tools.call(tc.name, tc.arguments);
-        final success = !result.contains('"status":"error"');
+        final success = !result.contains('"status":"error"') && !result.contains('"status":"denied"');
         debugPrint('[LLM] Tool result: ${result.length} chars, success=$success');
 
         onToolCall?.call(tc.name, tc.arguments, result, success);
-        messages.add(provider.buildToolResultMessage(toolCall: tc, result: result));
+        final toolResultMsg = provider.buildToolResultMessage(toolCall: tc, result: result);
+        debugPrint('[LLM] toolResultMsg: $toolResultMsg');
+        messages.add(toolResultMsg);
       }
       onStatus?.call('🤔 思考中...');
     }
