@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'settings_detail_scaffold.dart';
 import '../../services/agent_config.dart';
+import '../../services/pa_paths.dart';
+import '../../services/file_picker.dart';
 
 class AgentProfileScreen extends StatefulWidget {
   const AgentProfileScreen({super.key});
@@ -39,19 +42,42 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
     }
   }
 
+  Future<void> _pickAvatar() async {
+    final path = await pickImageFile();
+    if (path == null) return;
+    // Copy to data dir
+    final dataDir = await PAPaths.dataDir;
+    final dest = '$dataDir/avatar.png';
+    await File(path).copy(dest);
+    await AgentConfig.instance.setAvatarPath(dest);
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
+    final avatarPath = AgentConfig.instance.avatarPath;
     return SettingsDetailScaffold(title: 'Agent 形象', children: [
       Center(
-        child: Column(children: [
-          Container(
-            width: 96, height: 96,
-            decoration: BoxDecoration(color: PAColors.accentSoft, borderRadius: BorderRadius.circular(48)),
-            child: const Icon(Icons.smart_toy_outlined, size: 48, color: PAColors.accent),
-          ),
-          const SizedBox(height: 12),
-          const Text('点击更换形象', style: TextStyle(fontSize: 13, color: PAColors.textMuted)),
-        ]),
+        child: GestureDetector(
+          onTap: _pickAvatar,
+          child: Column(children: [
+            Container(
+              width: 96, height: 96,
+              decoration: BoxDecoration(
+                color: PAColors.accentSoft,
+                borderRadius: BorderRadius.circular(48),
+                image: avatarPath != null && File(avatarPath).existsSync()
+                    ? DecorationImage(image: FileImage(File(avatarPath)), fit: BoxFit.cover)
+                    : null,
+              ),
+              child: avatarPath == null || !File(avatarPath).existsSync()
+                  ? const Icon(Icons.smart_toy_outlined, size: 48, color: PAColors.accent)
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            const Text('点击更换头像', style: TextStyle(fontSize: 13, color: PAColors.textMuted)),
+          ]),
+        ),
       ),
       const SizedBox(height: 24),
       _section('基本信息'),
@@ -95,14 +121,11 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
         border: Border.all(color: PAColors.border),
       ),
       child: TextField(
-        controller: ctrl,
-        maxLines: maxLines,
+        controller: ctrl, maxLines: maxLines,
         style: const TextStyle(fontSize: 14, color: PAColors.textPrimary),
         decoration: InputDecoration(
-          labelText: label,
-          labelStyle: const TextStyle(color: PAColors.textMuted, fontSize: 13),
-          hintText: hint,
-          hintStyle: const TextStyle(color: PAColors.textMuted, fontSize: 13),
+          labelText: label, labelStyle: const TextStyle(color: PAColors.textMuted, fontSize: 13),
+          hintText: hint, hintStyle: const TextStyle(color: PAColors.textMuted, fontSize: 13),
           border: InputBorder.none,
         ),
       ),
@@ -111,8 +134,7 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
 
   Widget _voiceSelector() {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 8, runSpacing: 8,
       children: _voices.map((v) {
         final active = _voiceId == v;
         return GestureDetector(
@@ -125,10 +147,8 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
               borderRadius: BorderRadius.circular(PARadius.pill),
               border: active ? null : Border.all(color: PAColors.border),
             ),
-            child: Text(v,
-                style: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600,
-                    color: active ? Colors.white : PAColors.textSecondary)),
+            child: Text(v, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                color: active ? Colors.white : PAColors.textSecondary)),
           ),
         );
       }).toList(),
@@ -139,30 +159,15 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
     final label = _voiceSpeed == 1.0 ? '正常' : '${_voiceSpeed.toStringAsFixed(1)}x';
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: PAColors.bgSecondary,
-        borderRadius: BorderRadius.circular(PARadius.md),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('语速', style: TextStyle(fontSize: 15, color: PAColors.textPrimary)),
-              Text(label, style: const TextStyle(fontSize: 13, color: PAColors.textSecondary)),
-            ],
-          ),
-          Slider(
-            value: _voiceSpeed,
-            min: 0.5,
-            max: 2.0,
-            divisions: 6,
-            activeColor: PAColors.accent,
-            onChanged: (v) => setState(() => _voiceSpeed = v),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: PAColors.bgSecondary, borderRadius: BorderRadius.circular(PARadius.md)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Text('语速', style: TextStyle(fontSize: 15, color: PAColors.textPrimary)),
+          Text(label, style: const TextStyle(fontSize: 13, color: PAColors.textSecondary)),
+        ]),
+        Slider(value: _voiceSpeed, min: 0.5, max: 2.0, divisions: 6, activeColor: PAColors.accent,
+            onChanged: (v) => setState(() => _voiceSpeed = v)),
+      ]),
     );
   }
 
