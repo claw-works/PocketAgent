@@ -296,56 +296,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _toolCallBubble(_ToolCallEntry tc) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: PAColors.bgTertiary,
-          borderRadius: BorderRadius.circular(PARadius.sm),
-          border: Border.all(color: PAColors.border),
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(tc.success ? Icons.check_circle : Icons.error, size: 14,
-                color: tc.success ? PAColors.success : PAColors.accent),
-            const SizedBox(width: 6),
-            Text('🔧 ${tc.name}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: PAColors.accentCyan)),
-          ]),
-          if (tc.result.length <= 200)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(tc.result, style: const TextStyle(fontSize: 11, color: PAColors.textMuted), maxLines: 3, overflow: TextOverflow.ellipsis),
-            ),
-          if (tc.result.length > 200)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text('${tc.result.substring(0, 200)}...', style: const TextStyle(fontSize: 11, color: PAColors.textMuted)),
-            ),
-        ]),
-      ),
+    return _CollapsibleToolBubble(
+      icon: tc.success ? Icons.check_circle : Icons.error,
+      iconColor: tc.success ? PAColors.success : PAColors.accent,
+      title: '🔧 ${tc.name}',
+      content: tc.result,
     );
   }
 
   Widget _toolResultBubble(Message m) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: PAColors.bgTertiary,
-          borderRadius: BorderRadius.circular(PARadius.sm),
-          border: Border.all(color: PAColors.border),
-        ),
-        child: Row(children: [
-          const Icon(Icons.build_outlined, size: 14, color: PAColors.accentCyan),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text('🔧 ${m.toolName ?? "tool"}: ${m.content.length > 100 ? "${m.content.substring(0, 100)}..." : m.content}',
-                style: const TextStyle(fontSize: 12, color: PAColors.textMuted)),
-          ),
-        ]),
-      ),
+    return _CollapsibleToolBubble(
+      icon: Icons.build_outlined,
+      iconColor: PAColors.accentCyan,
+      title: '🔧 ${m.toolName ?? "tool"}',
+      content: m.content,
     );
   }
 
@@ -440,4 +404,58 @@ class _ToolCallEntry {
   final String result;
   final bool success;
   _ToolCallEntry({required this.name, required this.args, required this.result, required this.success});
+}
+
+class _CollapsibleToolBubble extends StatefulWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String content;
+  const _CollapsibleToolBubble({required this.icon, required this.iconColor, required this.title, required this.content});
+
+  @override
+  State<_CollapsibleToolBubble> createState() => _CollapsibleToolBubbleState();
+}
+
+class _CollapsibleToolBubbleState extends State<_CollapsibleToolBubble> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 12),
+      child: GestureDetector(
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: PAColors.bgTertiary,
+            borderRadius: BorderRadius.circular(PARadius.sm),
+            border: Border.all(color: PAColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(widget.icon, size: 12, color: widget.iconColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(widget.title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: PAColors.accentCyan)),
+                ),
+                Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 14, color: PAColors.textMuted),
+              ]),
+              if (_expanded)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    widget.content.length > 500 ? '${widget.content.substring(0, 500)}...' : widget.content,
+                    style: const TextStyle(fontSize: 11, color: PAColors.textMuted),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
