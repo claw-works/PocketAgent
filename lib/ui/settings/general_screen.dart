@@ -114,10 +114,10 @@ class _GeneralScreenState extends State<GeneralScreen> {
           child: Icon(icon, size: 18, color: Colors.white),
         ),
         const SizedBox(width: 12),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
           Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: PAColors.textPrimary)),
           const SizedBox(height: 2),
-          Text(value, style: const TextStyle(fontSize: 13, color: PAColors.textSecondary)),
+          Text(value, style: const TextStyle(fontSize: 12, color: PAColors.textSecondary)),
         ])),
         Switch(value: enabled, activeColor: PAColors.accent, onChanged: (v) { onChanged(v); setState(() {}); }),
       ]),
