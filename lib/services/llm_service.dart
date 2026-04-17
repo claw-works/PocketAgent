@@ -94,7 +94,12 @@ class LlmService {
 
     debugPrint('[LLM] provider=$type model=$modelName');
 
-    final messages = history.map((m) => m.toOpenAI()).toList();
+    // Filter out tool messages from history — they were part of a previous
+    // agent loop and don't have matching toolUse blocks in the stored messages.
+    final messages = history
+        .where((m) => m.role != MessageRole.tool)
+        .map((m) => m.toOpenAI())
+        .toList();
     final allContent = StringBuffer();
     var totalUsage = const TokenUsage();
 
