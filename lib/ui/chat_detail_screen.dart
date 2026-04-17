@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message.dart';
 import '../services/llm_service.dart';
+import '../services/agent_config.dart';
 import '../services/tool_registry.dart';
 import '../services/chat_store.dart';
 import 'theme.dart';
@@ -41,8 +42,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _init();
   }
 
+  bool _sessionAutoApprove = false;
+
   Future<bool> _confirmToolExecution(String name, Map<String, dynamic> args) async {
-    final result = await showDialog<bool>(
+    // Global auto-approve from settings
+    if (AgentConfig.instance.autoApproveTool) return true;
+    // Session-level auto-approve
+    if (_sessionAutoApprove) return true;
+
+    // 0 = deny, 1 = allow once, 2 = allow for session
+    final result = await showDialog<int>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: PAColors.bgSecondary,
@@ -52,15 +61,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           style: const TextStyle(color: PAColors.textSecondary, fontSize: 13),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('拒绝')),
+          TextButton(onPressed: () => Navigator.pop(context, 0), child: const Text('拒绝')),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(context, 2),
+            child: const Text('本次会话一直允许', style: TextStyle(color: PAColors.textMuted, fontSize: 12)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 1),
             child: const Text('允许', style: TextStyle(color: PAColors.accent)),
           ),
         ],
       ),
     );
-    return result ?? false;
+    final choice = result ?? 0;
+    if (choice == 2) _sessionAutoApprove = true;
+    return choice > 0;
   }
 
   Future<void> _init() async {
