@@ -3,10 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 import '../models/message.dart';
 import '../services/llm_service.dart';
-import '../services/providers/llm_provider.dart' show TokenUsage;
 import '../services/tool_registry.dart';
 import '../services/chat_store.dart';
-import '../services/db/database.dart' show ChatTopic;
 import 'theme.dart';
 import 'widgets/message_bubble.dart';
 
