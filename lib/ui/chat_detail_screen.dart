@@ -299,7 +299,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return _CollapsibleToolBubble(
       icon: tc.success ? Icons.check_circle : Icons.error,
       iconColor: tc.success ? PAColors.success : PAColors.accent,
-      title: '🔧 ${tc.name}',
+      title: tc.name,
       content: tc.result,
     );
   }
@@ -308,7 +308,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return _CollapsibleToolBubble(
       icon: Icons.build_outlined,
       iconColor: PAColors.accentCyan,
-      title: '🔧 ${m.toolName ?? "tool"}',
+      title: m.toolName ?? 'tool',
       content: m.content,
     );
   }
