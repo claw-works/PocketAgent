@@ -40,6 +40,17 @@ class MessageBubble extends StatelessWidget {
                     color: isUser ? Colors.white : PAColors.textPrimary,
                     height: 1.5,
                   ),
+                  blockquote: const TextStyle(
+                    fontSize: 14,
+                    color: PAColors.textSecondary,
+                    height: 1.5,
+                  ),
+                  blockquoteDecoration: BoxDecoration(
+                    color: PAColors.bgTertiary,
+                    borderRadius: BorderRadius.circular(PARadius.sm),
+                    border: Border(left: BorderSide(color: PAColors.accentPurple, width: 3)),
+                  ),
+                  blockquotePadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
                   code: TextStyle(
                     fontSize: 13,
                     color: PAColors.accentCyan,

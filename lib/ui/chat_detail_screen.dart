@@ -247,16 +247,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     }
 
-    // Streaming content
+    // Tool calls in progress (shown before streaming text)
+    for (final tc in _toolCalls) {
+      items.add(_toolCallBubble(tc));
+    }
+
+    // Streaming content (always at bottom, after tool calls)
     if (_loading && _streamingContent.isNotEmpty) {
       items.add(MessageBubble(
         message: Message(id: 'streaming', role: MessageRole.assistant, content: _streamingContent),
       ));
-    }
-
-    // Tool calls in progress
-    for (final tc in _toolCalls) {
-      items.add(_toolCallBubble(tc));
     }
 
     // Status
