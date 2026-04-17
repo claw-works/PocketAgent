@@ -38,12 +38,12 @@ class ChatStore extends ChangeNotifier {
     return _topics.firstWhere((t) => t.id == id);
   }
 
-  Future<List<ChatMessage>> getMessages(String topicId) {
-    return _db.getMessages(topicId);
+  Future<List<ChatMessage>> getMessages(String topicId, {int? limit}) {
+    return _db.getMessages(topicId, limit: limit);
   }
 
-  Stream<List<ChatMessage>> watchMessages(String topicId) {
-    return _db.watchMessages(topicId);
+  Stream<List<ChatMessage>> watchMessages(String topicId, {int? limit}) {
+    return _db.watchMessages(topicId, limit: limit);
   }
 
   Future<void> addMessage(String topicId, Message message) async {

@@ -87,18 +87,21 @@ class AppDatabase extends _$AppDatabase {
 
   // ── Chat Messages ───────────────────────────────────────
 
-  Future<List<ChatMessage>> getMessages(String topicId) {
-    return (select(chatMessages)
-          ..where((m) => m.topicId.equals(topicId))
-          ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
-        .get();
+  Future<List<ChatMessage>> getMessages(String topicId, {int? limit}) {
+    final q = select(chatMessages)
+      ..where((m) => m.topicId.equals(topicId))
+      ..orderBy([(m) => OrderingTerm.desc(m.createdAt)]);
+    if (limit != null) q.limit(limit);
+    // Query desc then reverse to get chronological order
+    return q.get().then((list) => list.reversed.toList());
   }
 
-  Stream<List<ChatMessage>> watchMessages(String topicId) {
-    return (select(chatMessages)
-          ..where((m) => m.topicId.equals(topicId))
-          ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
-        .watch();
+  Stream<List<ChatMessage>> watchMessages(String topicId, {int? limit}) {
+    final q = select(chatMessages)
+      ..where((m) => m.topicId.equals(topicId))
+      ..orderBy([(m) => OrderingTerm.desc(m.createdAt)]);
+    if (limit != null) q.limit(limit);
+    return q.watch().map((list) => list.reversed.toList());
   }
 
   Future<void> insertMessage(ChatMessagesCompanion msg) {

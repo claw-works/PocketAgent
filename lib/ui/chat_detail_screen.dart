@@ -89,7 +89,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _topicTitle = topic.title;
     }
     await _loadMessages();
-    ChatStore.instance.watchMessages(_topicId).listen((dbMsgs) {
+    _scrollToBottom();
+    ChatStore.instance.watchMessages(_topicId, limit: 100).listen((dbMsgs) {
       if (!mounted) return;
       setState(() {
         _messages = dbMsgs.map((m) => Message(
@@ -108,7 +109,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _loadMessages() async {
-    final dbMsgs = await ChatStore.instance.getMessages(_topicId);
+    final dbMsgs = await ChatStore.instance.getMessages(_topicId, limit: 100);
     setState(() {
       _messages = dbMsgs.map((m) => Message(
         id: m.id,
