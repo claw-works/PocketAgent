@@ -7,6 +7,14 @@ build/
 .pub-cache/
 .pub/
 pubspec.lock
+.metadata
+
+# Flutter generated platform files
+**/GeneratedPluginRegistrant.*
+ios/Flutter/
+macos/
+web/
+test/
 
 # Android
 android/.gradle/
