@@ -15,6 +15,7 @@ import '../tools/macos_tool.dart';
 import '../tools/browser_tool.dart';
 import '../tools/skill_tool.dart';
 import '../tools/windows_tool.dart';
+import '../tools/screenshot_tool.dart';
 import 'activity_log.dart';
 
 class ToolRegistry {
@@ -38,6 +39,7 @@ class ToolRegistry {
     if (Platform.isMacOS) register(MacOsTool());
     if (Platform.isWindows) register(WindowsTool());
     if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) register(BrowserTool());
+    if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) register(ScreenshotTool());
     register(SkillTool());
   }
 

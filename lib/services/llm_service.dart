@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../models/message.dart';
 import 'tool_registry.dart';
@@ -151,8 +152,26 @@ class LlmService {
         final success = !result.contains('"status":"error"') && !result.contains('"status":"denied"');
         debugPrint('[LLM] Tool result: ${result.length} chars, success=$success');
 
+        // Extract image if present (for vision)
+        String resultForLlm = result;
+        try {
+          final parsed = Map<String, dynamic>.from(
+              result.startsWith('{') ? (jsonDecode(result) as Map) : {});
+          if (parsed.containsKey('image_base64')) {
+            final img = parsed.remove('image_base64') as String;
+            resultForLlm = jsonEncode(parsed);
+            // Add tool result with image as separate vision message
+            final toolResultMsg = provider.buildToolResultMessage(toolCall: tc, result: resultForLlm);
+            toolResults.add(toolResultMsg);
+            // Add image as user message for vision models
+            messages.add(_buildVisionMessage(img, '截图分析'));
+            onToolCall?.call(tc.name, tc.arguments, '截图成功（${img.length ~/ 1370}KB）', success);
+            continue;
+          }
+        } catch (_) {}
+
         onToolCall?.call(tc.name, tc.arguments, result, success);
-        toolResults.add(provider.buildToolResultMessage(toolCall: tc, result: result));
+        toolResults.add(provider.buildToolResultMessage(toolCall: tc, result: resultForLlm));
       }
       // Merge tool results: if multiple, combine content arrays into one message
       if (toolResults.length == 1) {
@@ -175,5 +194,23 @@ class LlmService {
     return allContent.isEmpty
         ? '⚠️ 工具调用轮次过多（$maxToolRounds），已中止'
         : allContent.toString();
+  }
+
+  /// Build a vision message with base64 image for multimodal LLMs.
+  Map<String, dynamic> _buildVisionMessage(String base64Img, String text) {
+    return {
+      'role': 'user',
+      'content': [
+        {'type': 'text', 'text': text},
+        {
+          'type': 'image',
+          'source': {
+            'type': 'base64',
+            'media_type': 'image/png',
+            'data': base64Img,
+          },
+        },
+      ],
+    };
   }
 }
