@@ -21,6 +21,7 @@ typedef OnUsage = void Function(TokenUsage total);
 class LlmService {
   final ToolRegistry tools;
   bool _cancelled = false;
+  String? harnessPrompt; // Override system prompt for harness mode
 
   LlmService({required this.tools});
 
@@ -91,7 +92,9 @@ class LlmService {
     final provider = _createProvider(type);
     final base = baseUrl ?? _defaultBaseUrls[type]!;
     final modelName = model ?? _defaultModels[type]!;
-    final systemPrompt = AgentConfig.instance.systemPrompt;
+    final systemPrompt = harnessPrompt != null
+        ? '${AgentConfig.instance.systemPrompt}\n\n$harnessPrompt'
+        : AgentConfig.instance.systemPrompt;
 
     debugPrint('[LLM] provider=$type model=$modelName');
 

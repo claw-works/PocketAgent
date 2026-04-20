@@ -9,9 +9,12 @@ import '../services/chat_store.dart';
 import 'theme.dart';
 import 'widgets/message_bubble.dart';
 
+import '../services/skill/harness_model.dart';
+
 class ChatDetailScreen extends StatefulWidget {
   final String? topicId;
-  const ChatDetailScreen({super.key, this.topicId});
+  final HarnessSkill? harnessSkill;
+  const ChatDetailScreen({super.key, this.topicId, this.harnessSkill});
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -84,10 +87,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       final topic = ChatStore.instance.topics.firstWhere((t) => t.id == _topicId);
       _topicTitle = topic.title;
     } else {
-      final topic = await ChatStore.instance.create();
+      final title = widget.harnessSkill?.displayName;
+      final topic = await ChatStore.instance.create(title: title);
       _topicId = topic.id;
       _topicTitle = topic.title;
     }
+
+    // If harness skill, override system prompt
+    if (widget.harnessSkill != null) {
+      _llm.harnessPrompt = widget.harnessSkill!.fullPrompt;
+    }
+
     await _loadMessages();
     _scrollToBottom();
     ChatStore.instance.watchMessages(_topicId, limit: 100).listen((dbMsgs) {

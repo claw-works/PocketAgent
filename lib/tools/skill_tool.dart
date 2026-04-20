@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'base_tool.dart';
 import '../services/skill/skill_registry.dart';
+import '../services/skill/harness_model.dart';
 
 /// 🎯 Skill management — list, create, update, install, remove.
 /// AI can autonomously create and update skills based on experience.
@@ -20,14 +21,15 @@ class SkillTool extends BaseTool {
         'properties': {
           'action': {
             'type': 'string',
-            'enum': ['list', 'create', 'update', 'read', 'install_url', 'remove'],
+            'enum': ['list', 'create', 'update', 'read', 'install_url', 'remove', 'record_result'],
             'description':
                 'list: 列出已安装技能; '
-                'create: 创建新技能（写入 skill.md 和可选的 SOP md 文件）; '
+                'create: 创建新技能; '
                 'update: 更新现有技能的某个文件; '
                 'read: 读取技能内容; '
                 'install_url: 从 URL 安装; '
-                'remove: 删除技能',
+                'remove: 删除技能; '
+                'record_result: 记录 harness 执行结果（成功/失败/进化）',
           },
           'skill_name': {
             'type': 'string',
@@ -44,6 +46,22 @@ class SkillTool extends BaseTool {
           'url': {
             'type': 'string',
             'description': '技能文件的 URL（install_url 时必填）',
+          },
+          'success': {
+            'type': 'boolean',
+            'description': '执行是否成功（record_result 时必填）',
+          },
+          'sop_name': {
+            'type': 'string',
+            'description': '执行的 SOP 名称（record_result 时使用）',
+          },
+          'reason': {
+            'type': 'string',
+            'description': '失败原因（record_result 失败时使用）',
+          },
+          'fix_description': {
+            'type': 'string',
+            'description': '修正描述（record_result 进化时使用）',
           },
         },
         'required': ['action'],
@@ -101,6 +119,28 @@ class SkillTool extends BaseTool {
         case 'remove':
           await SkillRegistry.instance.remove(args['skill_name'] as String? ?? '');
           return jsonEncode({'status': 'ok', 'message': '技能已删除'});
+
+        case 'record_result':
+          final skillName = args['skill_name'] as String? ?? '';
+          final hs = SkillRegistry.instance.getHarness(skillName);
+          if (hs == null) return _err('未找到 harness 技能: $skillName');
+          final record = HarnessRecord(
+            time: DateTime.now(),
+            sop: args['sop_name'] as String? ?? '',
+            success: args['success'] as bool? ?? true,
+            reason: args['reason'] as String?,
+            fix: args['fix_description'] as String?,
+            autoEvolved: args['fix_description'] != null,
+          );
+          await hs.addRecord(record);
+          return jsonEncode({
+            'status': 'ok',
+            'message': record.autoEvolved
+                ? '已记录进化：${record.fix}'
+                : record.success ? '已记录成功' : '已记录失败：${record.reason}',
+            'total_runs': hs.totalRuns,
+            'success_rate': '${(hs.successRate * 100).toInt()}%',
+          });
 
         default:
           return _err('未知 action: $action');

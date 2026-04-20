@@ -4,6 +4,8 @@ import 'chat_detail_screen.dart';
 import '../services/chat_store.dart';
 import '../services/db/database.dart' show ChatTopic;
 
+import 'widgets/harness_list.dart';
+
 class ChatTopicsScreen extends StatefulWidget {
   const ChatTopicsScreen({super.key});
 
@@ -38,6 +40,7 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
       child: Column(
         children: [
           _header(context),
+          const HarnessListWidget(),
           _searchBar(),
           Expanded(
             child: filtered.isEmpty ? _empty() : _list(context, filtered),
