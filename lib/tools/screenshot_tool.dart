@@ -12,7 +12,7 @@ class ScreenshotTool extends BaseTool {
 
   @override
   String get description =>
-      '截取屏幕截图（全屏、指定窗口、或用户选择区域），返回图片供分析。';
+      '静默截取屏幕截图（全屏或当前最前窗口），无需用户交互，返回图片供分析。';
 
   @override
   Map<String, dynamic> get parameters => {
@@ -20,8 +20,8 @@ class ScreenshotTool extends BaseTool {
         'properties': {
           'mode': {
             'type': 'string',
-            'enum': ['fullscreen', 'window', 'region'],
-            'description': 'fullscreen: 全屏截图, window: 当前最前窗口, region: 用户手动选择区域',
+            'enum': ['fullscreen', 'window'],
+            'description': 'fullscreen: 全屏截图, window: 当前最前窗口（均为静默截图，无需用户操作）',
           },
         },
         'required': ['mode'],
@@ -39,17 +39,30 @@ class ScreenshotTool extends BaseTool {
 
   Future<String> _macOS(String mode) async {
     final path = await _tempPath();
-    final modeArgs = switch (mode) {
-      'window' => ['-w', '-o', path],     // front window, no shadow
-      'region' => ['-s', path],            // user selects region
-      _ => [path],                         // fullscreen
-    };
 
     try {
-      final result = await Process.run('screencapture', modeArgs)
-          .timeout(const Duration(seconds: 30));
-      if (result.exitCode != 0) {
-        return jsonEncode({'status': 'error', 'message': (result.stderr as String).trim()});
+      if (mode == 'window') {
+        // Silent window capture: get front window ID via AppleScript, then screencapture -l
+        final idResult = await Process.run('osascript', ['-e',
+          'tell application "System Events" to set fApp to name of first application process whose frontmost is true\n'
+          'tell application fApp to set wID to id of front window\n'
+          'return wID',
+        ]).timeout(const Duration(seconds: 5));
+
+        if (idResult.exitCode == 0) {
+          final windowId = (idResult.stdout as String).trim();
+          // screencapture -l<windowID> captures specific window silently
+          await Process.run('screencapture', ['-l$windowId', '-o', '-x', path])
+              .timeout(const Duration(seconds: 10));
+        } else {
+          // Fallback: full screen capture (silent)
+          await Process.run('screencapture', ['-x', path])
+              .timeout(const Duration(seconds: 10));
+        }
+      } else {
+        // fullscreen: -x = silent (no sound), no user interaction
+        await Process.run('screencapture', ['-x', path])
+            .timeout(const Duration(seconds: 10));
       }
       return _readAndEncode(path);
     } on TimeoutException {
