@@ -27,10 +27,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   String _topicTitle = '新对话';
   List<Message> _messages = [];
   bool _loading = false;
-  String _streamingContent = '';
   String _statusText = '';
   String _usageText = '';
-  final _toolCalls = <_ToolCallEntry>[];
+  // Unified timeline of streaming events (tool calls + text chunks interleaved)
+  final _liveItems = <_LiveItem>[];
   final _inputFocus = FocusNode();
 
   @override
@@ -140,10 +140,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     await ChatStore.instance.addMessage(_topicId, userMsg);
     setState(() {
       _loading = true;
-      _streamingContent = '';
       _statusText = '';
       _usageText = '';
-      _toolCalls.clear();
+      _liveItems.clear();
     });
     _scrollToBottom();
 
@@ -151,7 +150,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _messages,
       onDelta: (delta) {
         setState(() {
-          _streamingContent += delta;
+          // Append to last text item, or create new one
+          if (_liveItems.isNotEmpty && _liveItems.last is _LiveText) {
+            (_liveItems.last as _LiveText).buffer.write(delta);
+          } else {
+            _liveItems.add(_LiveText()..buffer.write(delta));
+          }
           _statusText = '';
         });
         _scrollToBottom();
@@ -162,7 +166,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       },
       onToolCall: (name, args, result, success) async {
         setState(() {
-          _toolCalls.add(_ToolCallEntry(name: name, args: args, result: result, success: success));
+          _liveItems.add(_LiveToolCall(name: name, result: result, success: success));
         });
         // Persist tool call as a tool message
         final toolMsg = Message(
@@ -185,7 +189,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     await ChatStore.instance.addMessage(_topicId, assistantMsg);
     setState(() {
       _loading = false;
-      _streamingContent = '';
+      _liveItems.clear();
       _statusText = '';
     });
     _scrollToBottom();
@@ -248,16 +252,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     }
 
-    // Tool calls in progress (shown before streaming text)
-    for (final tc in _toolCalls) {
-      items.add(_toolCallBubble(tc));
-    }
-
-    // Streaming content (always at bottom, after tool calls)
-    if (_loading && _streamingContent.isNotEmpty) {
-      items.add(MessageBubble(
-        message: Message(id: 'streaming', role: MessageRole.assistant, content: _streamingContent),
-      ));
+    // Live timeline: tool calls and streaming text interleaved in order
+    for (final item in _liveItems) {
+      if (item is _LiveToolCall) {
+        items.add(_toolCallWidget(item));
+      } else if (item is _LiveText) {
+        final text = item.buffer.toString();
+        if (text.isNotEmpty) {
+          items.add(MessageBubble(
+            message: Message(id: 'streaming', role: MessageRole.assistant, content: text),
+          ));
+        }
+      }
     }
 
     // Status
@@ -273,7 +279,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
 
     // Initial spinner
-    if (_loading && _streamingContent.isEmpty && _statusText.isEmpty && _toolCalls.isEmpty) {
+    if (_loading && _liveItems.isEmpty && _statusText.isEmpty) {
       items.add(const Padding(
         padding: EdgeInsets.all(8),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -296,7 +302,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  Widget _toolCallBubble(_ToolCallEntry tc) {
+  Widget _toolCallWidget(_LiveToolCall tc) {
     return _CollapsibleToolBubble(
       icon: tc.success ? Icons.check_circle : Icons.error,
       iconColor: tc.success ? PAColors.success : PAColors.accent,
@@ -399,12 +405,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 }
 
-class _ToolCallEntry {
+// Live timeline items
+abstract class _LiveItem {}
+
+class _LiveText extends _LiveItem {
+  final buffer = StringBuffer();
+}
+
+class _LiveToolCall extends _LiveItem {
   final String name;
-  final Map<String, dynamic> args;
   final String result;
   final bool success;
-  _ToolCallEntry({required this.name, required this.args, required this.result, required this.success});
+  _LiveToolCall({required this.name, required this.result, required this.success});
 }
 
 class _CollapsibleToolBubble extends StatefulWidget {
