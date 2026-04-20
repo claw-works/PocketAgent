@@ -141,19 +141,19 @@ class ScreenshotTool extends BaseTool {
     }
     final bytes = await file.readAsBytes();
     final base64Img = base64Encode(bytes);
-    // Clean up
-    await file.delete().catchError((_) => file);
     return jsonEncode({
       'status': 'ok',
       'image_base64': base64Img,
+      'path': path,
       'size_bytes': bytes.length,
-      'message': '截图成功（${bytes.length ~/ 1024}KB）',
+      'message': '截图成功（${bytes.length ~/ 1024}KB），已保存到 $path',
     });
   }
 
   Future<String> _tempPath() async {
-    final dir = await PAPaths.dataDir;
-    return '$dir/screenshot_${DateTime.now().millisecondsSinceEpoch}.png';
+    final dir = await PAPaths.screenshotsDir;
+    final ts = DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first;
+    return '$dir/screenshot_$ts.png';
   }
 
   Future<String?> _findLinuxTool() async {

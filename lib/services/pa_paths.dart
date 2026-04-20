@@ -44,4 +44,11 @@ class PAPaths {
     await Directory(dir).create(recursive: true);
     return dir;
   }
+
+  static Future<String> get screenshotsDir async {
+    final b = await base;
+    final dir = '$b/screenshots';
+    await Directory(dir).create(recursive: true);
+    return dir;
+  }
 }
