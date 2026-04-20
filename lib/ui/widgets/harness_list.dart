@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
-import '../chat_detail_screen.dart';
+import 'harness_detail_screen.dart';
 import '../../services/skill/skill_registry.dart';
 import '../../services/skill/harness_model.dart';
 
@@ -114,7 +114,7 @@ class _HarnessListWidgetState extends State<HarnessListWidget> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => ChatDetailScreen(harnessSkill: skill),
+        builder: (_) => HarnessDetailScreen(skill: skill),
       ),
     );
   }
