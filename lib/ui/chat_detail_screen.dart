@@ -170,8 +170,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       final reply = await _llm.streamChat(
         _messages,
         onDelta: (delta) {
+          if (!mounted) return;
           setState(() {
-            // Append to last text item, or create new one
             if (_liveItems.isNotEmpty && _liveItems.last is _LiveText) {
               (_liveItems.last as _LiveText).buffer.write(delta);
             } else {
@@ -182,14 +182,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           _scrollToBottom();
         },
         onStatus: (status) {
+          if (!mounted) return;
           setState(() => _statusText = status);
           _scrollToBottom();
         },
         onToolCall: (name, args, result, success) async {
-          setState(() {
-            _liveItems.add(_LiveToolCall(name: name, result: result, success: success));
-          });
-          // Persist tool call as a tool message
+          if (mounted) {
+            setState(() {
+              _liveItems.add(_LiveToolCall(name: name, result: result, success: success));
+            });
+          }
           final toolMsg = Message(
             id: _uuid.v4(),
             role: MessageRole.tool,
@@ -201,6 +203,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           _scrollToBottom();
         },
         onUsage: (usage) {
+          if (!mounted) return;
           setState(() => _usageText = '${usage.totalTokens} tokens');
         },
       );
@@ -231,6 +234,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   void _cancel() {
     _llm.cancel();
+    if (!mounted) return;
     setState(() {
       _loading = false;
       _statusText = '';
