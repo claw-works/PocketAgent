@@ -50,7 +50,8 @@ class AgentConfig extends ChangeNotifier {
         '创建 Skill 时：\n'
         '- skill.md 写清楚角色、策略、注意事项\n'
         '- SOP 文件写清楚操作步骤、关键选择器、异常处理\n'
-        '- 用 skill 工具的 create action 写入文件\n';
+        '- **必须创建 harness.md**，包含验证条件、失败处理和性能基线，否则技能不会出现在助手列表中\n'
+        '- 用 skill 工具的 create action 依次写入 skill.md、SOP 文件和 harness.md\n';
     final skills = SkillRegistry.instance.combinedPrompt;
     return base + skills;
   }

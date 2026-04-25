@@ -5,6 +5,7 @@ import '../services/chat_store.dart';
 import '../services/db/database.dart' show ChatTopic;
 
 import 'widgets/harness_list.dart';
+import 'widgets/new_chat_picker.dart';
 
 class ChatTopicsScreen extends StatefulWidget {
   const ChatTopicsScreen({super.key});
@@ -32,7 +33,9 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final topics = ChatStore.instance.topics;
+    final topics = ChatStore.instance.topics
+        .where((t) => t.id != '__command_center__')
+        .toList();
     final filtered = _searchQuery.isEmpty
         ? topics
         : topics.where((t) => t.title.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
@@ -88,7 +91,13 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
                   fontWeight: FontWeight.w700,
                   color: PAColors.textPrimary)),
           GestureDetector(
-            onTap: () => _openChat(context, null),
+            onTap: () async {
+              final skill = await NewChatPicker.show(context);
+              if (!context.mounted) return;
+              Navigator.push(context, MaterialPageRoute(
+                builder: (_) => ChatDetailScreen(harnessSkill: skill),
+              ));
+            },
             child: Container(
               width: 36,
               height: 36,

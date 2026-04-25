@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'ui/theme.dart';
-import 'ui/main_shell.dart';
+import 'ui/responsive_shell.dart';
 
 class PocketAgentApp extends StatelessWidget {
   const PocketAgentApp({super.key});
@@ -11,7 +11,7 @@ class PocketAgentApp extends StatelessWidget {
       title: 'PocketAgent',
       debugShowCheckedModeBanner: false,
       theme: paTheme(),
-      home: const MainShell(),
+      home: const ResponsiveShell(),
     );
   }
 }

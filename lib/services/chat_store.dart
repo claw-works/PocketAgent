@@ -24,8 +24,13 @@ class ChatStore extends ChangeNotifier {
     });
   }
 
-  Future<ChatTopic> create({String? title}) async {
-    final id = _uuid.v4();
+  Future<ChatTopic> create({String? title, String? fixedId}) async {
+    // 如果指定了 fixedId 且已存在，直接返回
+    if (fixedId != null) {
+      final existing = _topics.where((t) => t.id == fixedId).firstOrNull;
+      if (existing != null) return existing;
+    }
+    final id = fixedId ?? _uuid.v4();
     final now = DateTime.now();
     await _db.upsertTopic(ChatTopicsCompanion.insert(
       id: id,

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:image/image.dart' as img;
 import 'base_tool.dart';
 import '../services/pa_paths.dart';
 
@@ -139,14 +141,38 @@ class ScreenshotTool extends BaseTool {
     if (!await file.exists()) {
       return jsonEncode({'status': 'error', 'message': '截图文件未生成（用户可能取消了）'});
     }
-    final bytes = await file.readAsBytes();
-    final base64Img = base64Encode(bytes);
+    final originalBytes = await file.readAsBytes();
+
+    // 压缩：最长边 ≤ 1280，JPEG q=85（视觉模型足够）
+    const maxSide = 1280;
+    const quality = 85;
+    Uint8List outBytes = originalBytes;
+    try {
+      final decoded = img.decodeImage(originalBytes);
+      if (decoded != null) {
+        final longest = decoded.width > decoded.height ? decoded.width : decoded.height;
+        final resized = longest > maxSide
+            ? img.copyResize(
+                decoded,
+                width: decoded.width >= decoded.height ? maxSide : null,
+                height: decoded.height > decoded.width ? maxSide : null,
+                interpolation: img.Interpolation.linear,
+              )
+            : decoded;
+        outBytes = Uint8List.fromList(img.encodeJpg(resized, quality: quality));
+      }
+    } catch (_) {
+      // 压缩失败则用原图
+    }
+
+    final base64Img = base64Encode(outBytes);
     return jsonEncode({
       'status': 'ok',
       'image_base64': base64Img,
       'path': path,
-      'size_bytes': bytes.length,
-      'message': '截图成功（${bytes.length ~/ 1024}KB），已保存到 $path',
+      'size_bytes': outBytes.length,
+      'original_bytes': originalBytes.length,
+      'message': '截图成功（原始 ${originalBytes.length ~/ 1024}KB → 压缩 ${outBytes.length ~/ 1024}KB），已保存到 $path',
     });
   }
 

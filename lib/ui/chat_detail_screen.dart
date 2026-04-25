@@ -14,7 +14,14 @@ import '../services/skill/harness_model.dart';
 class ChatDetailScreen extends StatefulWidget {
   final String? topicId;
   final HarnessSkill? harnessSkill;
-  const ChatDetailScreen({super.key, this.topicId, this.harnessSkill});
+  /// 固定 topicId（如指挥中心用 `__command_center__`），优先于自动生成
+  final String? fixedTopicId;
+  const ChatDetailScreen({
+    super.key,
+    this.topicId,
+    this.harnessSkill,
+    this.fixedTopicId,
+  });
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -88,7 +95,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _topicTitle = topic.title;
     } else {
       final title = widget.harnessSkill?.displayName;
-      final topic = await ChatStore.instance.create(title: title);
+      final topic = await ChatStore.instance.create(
+        title: title,
+        fixedId: widget.fixedTopicId,
+      );
       _topicId = topic.id;
       _topicTitle = topic.title;
     }
@@ -134,7 +144,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollCtrl.hasClients) {
+      if (mounted && _scrollCtrl.hasClients) {
         _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent,
             duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
       }
@@ -156,53 +166,67 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     });
     _scrollToBottom();
 
-    final reply = await _llm.streamChat(
-      _messages,
-      onDelta: (delta) {
+    try {
+      final reply = await _llm.streamChat(
+        _messages,
+        onDelta: (delta) {
+          setState(() {
+            // Append to last text item, or create new one
+            if (_liveItems.isNotEmpty && _liveItems.last is _LiveText) {
+              (_liveItems.last as _LiveText).buffer.write(delta);
+            } else {
+              _liveItems.add(_LiveText()..buffer.write(delta));
+            }
+            _statusText = '';
+          });
+          _scrollToBottom();
+        },
+        onStatus: (status) {
+          setState(() => _statusText = status);
+          _scrollToBottom();
+        },
+        onToolCall: (name, args, result, success) async {
+          setState(() {
+            _liveItems.add(_LiveToolCall(name: name, result: result, success: success));
+          });
+          // Persist tool call as a tool message
+          final toolMsg = Message(
+            id: _uuid.v4(),
+            role: MessageRole.tool,
+            content: result,
+            toolName: name,
+            toolCallId: name,
+          );
+          await ChatStore.instance.addMessage(_topicId, toolMsg);
+          _scrollToBottom();
+        },
+        onUsage: (usage) {
+          setState(() => _usageText = '${usage.totalTokens} tokens');
+        },
+      );
+
+      // Save final assistant reply
+      final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: reply);
+      await ChatStore.instance.addMessage(_topicId, assistantMsg);
+    } catch (e, st) {
+      debugPrint('[Chat] Error: $e\n$st');
+      // 把错误注入会话，用户能看到并知道可以重试
+      final errMsg = Message(
+        id: _uuid.v4(),
+        role: MessageRole.assistant,
+        content: '⚠️ **出错了**\n\n```\n$e\n```\n\n请检查上述错误（通常是模型配置、网络或工具调用）。你可以修改输入后重新发送。',
+      );
+      await ChatStore.instance.addMessage(_topicId, errMsg);
+    } finally {
+      if (mounted) {
         setState(() {
-          // Append to last text item, or create new one
-          if (_liveItems.isNotEmpty && _liveItems.last is _LiveText) {
-            (_liveItems.last as _LiveText).buffer.write(delta);
-          } else {
-            _liveItems.add(_LiveText()..buffer.write(delta));
-          }
+          _loading = false;
+          _liveItems.clear();
           _statusText = '';
         });
         _scrollToBottom();
-      },
-      onStatus: (status) {
-        setState(() => _statusText = status);
-        _scrollToBottom();
-      },
-      onToolCall: (name, args, result, success) async {
-        setState(() {
-          _liveItems.add(_LiveToolCall(name: name, result: result, success: success));
-        });
-        // Persist tool call as a tool message
-        final toolMsg = Message(
-          id: _uuid.v4(),
-          role: MessageRole.tool,
-          content: result,
-          toolName: name,
-          toolCallId: name,
-        );
-        await ChatStore.instance.addMessage(_topicId, toolMsg);
-        _scrollToBottom();
-      },
-      onUsage: (usage) {
-        setState(() => _usageText = '${usage.totalTokens} tokens');
-      },
-    );
-
-    // Save final assistant reply
-    final assistantMsg = Message(id: _uuid.v4(), role: MessageRole.assistant, content: reply);
-    await ChatStore.instance.addMessage(_topicId, assistantMsg);
-    setState(() {
-      _loading = false;
-      _liveItems.clear();
-      _statusText = '';
-    });
-    _scrollToBottom();
+      }
+    }
   }
 
   void _cancel() {
@@ -233,11 +257,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: const Icon(Icons.chevron_left, size: 24, color: PAColors.accent),
-          ),
-          const SizedBox(width: 8),
+          if (Navigator.canPop(context)) ...[
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: const Icon(Icons.chevron_left, size: 24, color: PAColors.accent),
+            ),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: Text(_topicTitle,
                 maxLines: 1, overflow: TextOverflow.ellipsis,
@@ -262,18 +288,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       }
     }
 
-    // Live timeline: tool calls and streaming text interleaved in order
-    for (final item in _liveItems) {
-      if (item is _LiveToolCall) {
-        items.add(_toolCallWidget(item));
-      } else if (item is _LiveText) {
-        final text = item.buffer.toString();
-        if (text.isNotEmpty) {
-          items.add(MessageBubble(
-            message: Message(id: 'streaming', role: MessageRole.assistant, content: text),
-          ));
-        }
-      }
+    // Live timeline: tool calls render first (above bubble), then aggregated text bubble
+    final liveTools = _liveItems.whereType<_LiveToolCall>();
+    final liveTexts = _liveItems.whereType<_LiveText>();
+    for (final tc in liveTools) {
+      items.add(_toolCallWidget(tc));
+    }
+    final aggregatedText = liveTexts.map((t) => t.buffer.toString()).join();
+    if (aggregatedText.isNotEmpty) {
+      items.add(MessageBubble(
+        message: Message(id: 'streaming', role: MessageRole.assistant, content: aggregatedText),
+      ));
     }
 
     // Status

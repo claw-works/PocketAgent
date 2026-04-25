@@ -26,15 +26,41 @@ class CdpClient {
         '--remote-debugging-port=$port',
         '--no-first-run',
         '--no-default-browser-check',
+        '--new-window',
         '--user-data-dir=$profileDir',
       ]);
 
       // Wait for Chrome to start
       for (var i = 0; i < 20; i++) {
         await Future.delayed(const Duration(milliseconds: 500));
-        if (await _tryConnect(port)) return;
+        if (await _tryConnect(port)) {
+          await _bringToFront();
+          return;
+        }
       }
       throw Exception('Chrome debug port $port not responding');
+    } else {
+      await _bringToFront();
+    }
+  }
+
+  /// 把 Chrome 窗口拉到前台（macOS/Windows/Linux）
+  Future<void> _bringToFront() async {
+    try {
+      if (Platform.isMacOS) {
+        await Process.run('osascript', ['-e', 'tell application "Google Chrome" to activate']);
+      } else if (Platform.isWindows) {
+        // PowerShell 激活 Chrome 窗口
+        await Process.run('powershell', [
+          '-NoProfile',
+          '-Command',
+          r'(New-Object -ComObject WScript.Shell).AppActivate((Get-Process chrome | Where-Object {$_.MainWindowTitle} | Select-Object -First 1).Id)',
+        ]);
+      } else if (Platform.isLinux) {
+        await Process.run('wmctrl', ['-a', 'Chrome']);
+      }
+    } catch (_) {
+      // 激活失败不影响主流程
     }
   }
 

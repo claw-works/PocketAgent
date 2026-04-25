@@ -112,13 +112,24 @@ class BrowserTool extends BaseTool {
           return _ok('已在 $selector 输入文字');
 
         case 'screenshot':
-          final result = await _cdp.send('Page.captureScreenshot', {'format': 'png'});
+          // CDP 截图不需要窗口前台，直接从渲染引擎抓 bitmap
+          final result = await _cdp.send('Page.captureScreenshot', {
+            'format': 'jpeg',
+            'quality': 85,
+          });
           if (result['error'] != null) return _err(result['error']['message']);
-          // Save to temp file
           final data = result['result']['data'] as String;
-          final file = File('${Directory.systemTemp.path}/pa_screenshot.png');
+          // 保存一份到本地（方便调试）
+          final file = File('${Directory.systemTemp.path}/pa_screenshot.jpg');
           await file.writeAsBytes(base64Decode(data));
-          return jsonEncode({'status': 'ok', 'path': file.path, 'message': '截图已保存'});
+          // 同时把 base64 返给 LLM 走 vision 分析
+          return jsonEncode({
+            'status': 'ok',
+            'image_base64': data,
+            'path': file.path,
+            'size_bytes': (data.length * 3) ~/ 4,
+            'message': '截图已保存并传给视觉分析',
+          });
 
         case 'get_tabs':
           final result = await _cdp.send('Target.getTargets');

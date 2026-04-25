@@ -126,6 +126,114 @@ class SkillRegistry extends ChangeNotifier {
   Future<void> _installBuiltins() async {
     final dirPath = await skillsDir;
 
+    // Built-in harness skill: X (Twitter) Post
+    final xPostDir = Directory('$dirPath/x_post');
+    await xPostDir.create(recursive: true);
+    await File('${xPostDir.path}/skill.md').writeAsString('''
+# X (Twitter) 发帖助手
+
+## 你的角色
+你是一个 X 发帖专家，帮用户把想法发布到 X (Twitter)。
+
+## 策略
+- 用户给出大致内容后，主动优化成适合 X 的帖子（简洁、有钩子、可带 emoji）
+- 单条帖子限制 280 字符，超过要问用户：截断 / 发成 thread / 精简
+- 发帖前务必给用户看最终版本，用户确认后再发
+- 如果需要图片/链接附件，提前让用户准备
+
+## 核心流程
+1. 生成/确认帖子内容
+2. 用户确认 → 执行 publish SOP
+3. 验证帖子已发出（URL、时间戳）
+4. 失败则按 harness 定义处理
+
+## 可用 SOP
+- `publish` — 标准发帖流程
+- `publish_thread` — 发 thread (多条串联)
+''');
+
+    await File('${xPostDir.path}/publish.md').writeAsString('''
+# SOP: publish (发单条帖子)
+
+## 前置条件
+- 用户已确认帖子内容 (content)
+- 字数 ≤ 280
+- 浏览器已登录 X 账号（如未登录，先告诉用户手动登录）
+
+## 步骤
+1. `browser(navigate, url: "https://x.com/home")`
+2. 等待 2 秒，确认已登录（检查是否有 "Post" 按钮或撰写框）
+3. 点击撰写框：`browser(click, selector: '[data-testid="tweetTextarea_0"]')`
+4. 输入内容：`browser(type_text, selector: '[data-testid="tweetTextarea_0"]', text: content)`
+5. 截图给用户确认
+6. 点击发送按钮：`browser(click, selector: '[data-testid="tweetButtonInline"]')`
+7. 等待 3 秒，验证：
+   - 撰写框被清空
+   - 页面出现"Your post was sent"或新帖子出现在时间线
+8. 返回新帖子链接（可用 `[data-testid="tweet"] a[href*="/status/"]` 取第一个）
+
+## 选择器参考（可能会变）
+| 元素 | 选择器 |
+|-----|-------|
+| 撰写框 | `[data-testid="tweetTextarea_0"]` |
+| 发送按钮 | `[data-testid="tweetButtonInline"]` |
+| 已发帖子链接 | `[data-testid="tweet"] a[href*="/status/"]` |
+
+## 异常
+- 未登录：停止，告诉用户手动登录
+- 字数超限：停止，回报实际字数
+- 发送按钮被禁用：可能内容违规，截图让用户判断
+''');
+
+    await File('${xPostDir.path}/publish_thread.md').writeAsString('''
+# SOP: publish_thread (发 thread)
+
+## 前置条件
+- 内容已分段成数组 segments[]，每段 ≤ 280
+- 用户已确认所有段落
+
+## 步骤
+1. 导航到 `https://x.com/home` 并确认登录
+2. 点击撰写框，输入第一段
+3. 对于剩余每一段：
+   - 点击 "+" 添加按钮：`browser(click, selector: '[data-testid="addButton"]')`
+   - 在新增的文本框 `[data-testid="tweetTextarea_{i}"]` 输入内容
+4. 截图让用户确认整个 thread
+5. 点击发送：`browser(click, selector: '[data-testid="tweetButtonInline"]')`
+6. 验证：所有段落出现在时间线，形成串联
+
+## 选择器参考
+| 元素 | 选择器 |
+|-----|-------|
+| 添加按钮 | `[data-testid="addButton"]` |
+| 第 i 个文本框 | `[data-testid="tweetTextarea_\${i}"]` |
+''');
+
+    await File('${xPostDir.path}/harness.md').writeAsString('''
+# 验证条件
+
+## publish SOP 完成后
+- 撰写框必须变空
+- 页面出现"发送成功"提示，或新帖子出现在时间线顶部
+- 必须能返回新帖子的 URL（形如 `https://x.com/{user}/status/{id}`）
+- 如果任一条件不满足 → 判定失败
+
+## publish_thread SOP 完成后
+- 首条帖子有回复按钮显示 N-1 条回复（N = segments.length）
+- 每段内容按顺序对应时间线中的 N 条连续帖子
+
+## 失败处理优先级
+1. **登录失效** → 不修正 SOP，直接告诉用户重新登录
+2. **选择器失效** → 更新 publish.md / publish_thread.md 的选择器参考表
+3. **流程变更** (X 改版增加步骤) → 更新整个 SOP
+4. **网络超时** → 重试 1 次，不修改 SOP
+
+## 性能基线
+- publish: 期望 ≤ 8 秒
+- publish_thread (3 段): 期望 ≤ 15 秒
+- 超时 50% 以上 → 检查是否有多余的 wait/screenshot 步骤可优化
+''');
+
     // Built-in harness skill: Google Search
     final searchDir = Directory('$dirPath/google_search');
     await searchDir.create(recursive: true);

@@ -93,7 +93,9 @@ class LlmService {
     final base = baseUrl ?? _defaultBaseUrls[type]!;
     final modelName = model ?? _defaultModels[type]!;
     final systemPrompt = harnessPrompt != null
-        ? '${AgentConfig.instance.systemPrompt}\n\n$harnessPrompt'
+        ? '${AgentConfig.instance.systemPrompt}\n\n'
+            '⚠️ 你现在处于专属助手模式，必须严格按照以下技能定义执行任务，'
+            '不要使用其他技能的 SOP 或流程。\n\n$harnessPrompt'
         : AgentConfig.instance.systemPrompt;
 
     debugPrint('[LLM] provider=$type model=$modelName');
@@ -163,11 +165,22 @@ class LlmService {
           if (parsed.containsKey('image_base64')) {
             final img = parsed.remove('image_base64') as String;
             resultForLlm = jsonEncode(parsed);
-            // Add tool result with image as separate vision message
-            final toolResultMsg = provider.buildToolResultMessage(toolCall: tc, result: resultForLlm);
-            toolResults.add(toolResultMsg);
-            // Add image as user message for vision models
-            messages.add(_buildVisionMessage(img, '截图分析'));
+            // 构造包含图像的 toolResult（Bedrock 格式）
+            final toolResultWithImage = {
+              'role': 'user',
+              'content': [
+                {
+                  'toolResult': {
+                    'toolUseId': tc.id,
+                    'content': [
+                      {'text': resultForLlm},
+                      {'image': {'format': 'jpeg', 'source': {'bytes': img}}},
+                    ],
+                  }
+                }
+              ],
+            };
+            toolResults.add(toolResultWithImage);
             onToolCall?.call(tc.name, tc.arguments, '截图成功（${img.length ~/ 1370}KB）', success);
             continue;
           }
@@ -199,21 +212,4 @@ class LlmService {
         : allContent.toString();
   }
 
-  /// Build a vision message with base64 image for multimodal LLMs.
-  Map<String, dynamic> _buildVisionMessage(String base64Img, String text) {
-    return {
-      'role': 'user',
-      'content': [
-        {'type': 'text', 'text': text},
-        {
-          'type': 'image',
-          'source': {
-            'type': 'base64',
-            'media_type': 'image/png',
-            'data': base64Img,
-          },
-        },
-      ],
-    };
-  }
 }
