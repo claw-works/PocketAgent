@@ -62,8 +62,8 @@ class ChatStore extends ChangeNotifier {
     ));
 
     // Auto-title from first user message
-    final topic = _topics.firstWhere((t) => t.id == topicId);
-    var title = topic.title;
+    final topic = _topics.where((t) => t.id == topicId).firstOrNull;
+    var title = topic?.title ?? '新对话';
     if (title == '新对话' && message.role == MessageRole.user) {
       title = message.content.length > 20
           ? '${message.content.substring(0, 20)}...'

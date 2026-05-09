@@ -10,10 +10,11 @@ class CdpClient {
   WebSocket? _ws;
   int _id = 0;
   final _pending = <int, Completer<Map<String, dynamic>>>{};
+  final _eventListeners = <String, List<Completer<Map<String, dynamic>>>>{};
   String? _sessionId;
 
   /// Find or launch Chrome with debug port, connect CDP.
-  Future<void> connect({int port = 9222}) async {
+  Future<void> connect({int port = 9333}) async {
     // Try connecting to existing debug instance first
     if (!await _tryConnect(port)) {
       // Launch Chrome with debug port
@@ -64,27 +65,49 @@ class CdpClient {
     }
   }
 
-  Future<bool> _tryConnect(int port) async {
-    try {
-      final resp = await HttpClient()
-          .getUrl(Uri.parse('http://127.0.0.1:$port/json'))
-          .then((r) => r.close())
-          .timeout(const Duration(seconds: 2));
-      final body = await resp.transform(utf8.decoder).join();
-      final tabs = jsonDecode(body) as List;
-      final page = tabs.firstWhere(
-        (t) => t['type'] == 'page',
-        orElse: () => null,
-      );
-      if (page == null) return false;
+  /// 需要过滤的 Chrome 内部假 target URL 前缀
+  static const _internalPrefixes = [
+    'chrome://',
+    'chrome-extension://',
+    'devtools://',
+    'about:',
+  ];
 
-      final wsUrl = page['webSocketDebuggerUrl'] as String;
-      _ws = await WebSocket.connect(wsUrl);
-      _ws!.listen(_onMessage, onDone: _onDone, onError: _onError);
-      return true;
-    } catch (_) {
-      return false;
+  /// 判断是否为真实的用户页面 target
+  static bool _isRealPage(Map<String, dynamic> t) {
+    if (t['type'] != 'page') return false;
+    final url = (t['url'] as String?) ?? '';
+    for (final prefix in _internalPrefixes) {
+      if (url.startsWith(prefix)) return false;
     }
+    return true;
+  }
+
+  Future<bool> _tryConnect(int port) async {
+    // Chrome 147+ 可能只监听 IPv6，依次尝试
+    for (final host in ['[::1]', '127.0.0.1']) {
+      try {
+        final resp = await HttpClient()
+            .getUrl(Uri.parse('http://$host:$port/json'))
+            .then((r) => r.close())
+            .timeout(const Duration(seconds: 2));
+        final body = await resp.transform(utf8.decoder).join();
+        final tabs = jsonDecode(body) as List;
+        // 优先找真实页面，找不到就用任意 page 类型（含 newtab）
+        final allPages = tabs.cast<Map<String, dynamic>>().where((t) => t['type'] == 'page').toList();
+        final page = allPages.where(_isRealPage).firstOrNull ?? allPages.firstOrNull;
+        if (page == null) continue;
+
+        final wsUrl = page['webSocketDebuggerUrl'] as String;
+        _ws = await WebSocket.connect(wsUrl);
+        _ws!.listen(_onMessage, onDone: _onDone, onError: _onError);
+        await send('Page.enable');
+        return true;
+      } catch (_) {
+        continue;
+      }
+    }
+    return false;
   }
 
   Future<String?> _findChrome() async {
@@ -124,6 +147,14 @@ class CdpClient {
     if (id != null && _pending.containsKey(id)) {
       _pending.remove(id)!.complete(msg);
     }
+    // 分发 CDP 事件给等待者
+    final method = msg['method'] as String?;
+    if (method != null && _eventListeners.containsKey(method)) {
+      final waiters = _eventListeners.remove(method)!;
+      for (final c in waiters) {
+        c.complete(msg);
+      }
+    }
   }
 
   void _onDone() {
@@ -156,6 +187,21 @@ class CdpClient {
   }
 
   bool get isConnected => _ws != null;
+
+  /// 等待某个 CDP 事件触发
+  Future<Map<String, dynamic>> waitForEvent(String event, {Duration timeout = const Duration(seconds: 15)}) {
+    final completer = Completer<Map<String, dynamic>>();
+    _eventListeners.putIfAbsent(event, () => []).add(completer);
+    return completer.future.timeout(timeout, onTimeout: () {
+      _eventListeners[event]?.remove(completer);
+      return <String, dynamic>{'timeout': true};
+    });
+  }
+
+  /// 等待页面加载完成（Page.loadEventFired）
+  Future<void> waitForLoad({Duration timeout = const Duration(seconds: 15)}) async {
+    await waitForEvent('Page.loadEventFired', timeout: timeout);
+  }
 
   Future<void> close() async {
     await _ws?.close();

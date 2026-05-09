@@ -153,69 +153,12 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
   }
 
   Widget _topicTile(BuildContext context, ChatTopic t) {
-    final timeStr = _formatTime(t.updatedAt);
-
-    return Dismissible(
-      key: Key(t.id),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete_outline, color: PAColors.accent),
-      ),
-      onDismissed: (_) => ChatStore.instance.delete(t.id),
-      child: GestureDetector(
-        onTap: () => _openChat(context, t.id),
-        onLongPress: () => _confirmDelete(context, t),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: PAColors.accentSoft,
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: const Icon(Icons.chat_bubble_outline,
-                    size: 22, color: PAColors.accent),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(t.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: PAColors.textPrimary)),
-                        ),
-                        Text(timeStr,
-                            style: const TextStyle(
-                                fontSize: 12, color: PAColors.textMuted)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(timeStr,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 13, color: PAColors.textSecondary)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return _TopicTile(
+      topic: t,
+      timeStr: _formatTime(t.updatedAt),
+      onTap: () => _openChat(context, t.id),
+      onLongPress: () => _confirmDelete(context, t),
+      onDelete: () => ChatStore.instance.delete(t.id),
     );
   }
 
@@ -297,5 +240,131 @@ class _ChatTopicsScreenState extends State<ChatTopicsScreen> {
     if (diff.inHours < 24) return '${diff.inHours}小时前';
     if (diff.inDays < 7) return '${diff.inDays}天前';
     return '${dt.month}/${dt.day}';
+  }
+}
+
+class _TopicTile extends StatefulWidget {
+  final ChatTopic topic;
+  final String timeStr;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final VoidCallback onDelete;
+
+  const _TopicTile({
+    required this.topic,
+    required this.timeStr,
+    required this.onTap,
+    required this.onLongPress,
+    required this.onDelete,
+  });
+
+  @override
+  State<_TopicTile> createState() => _TopicTileState();
+}
+
+class _TopicTileState extends State<_TopicTile> {
+  bool _hovered = false;
+  bool _confirming = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dismissible(
+      key: Key(widget.topic.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete_outline, color: PAColors.accent),
+      ),
+      onDismissed: (_) => widget.onDelete(),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() {
+          _hovered = false;
+          _confirming = false;
+        }),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: PAColors.accentSoft,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: const Icon(Icons.chat_bubble_outline,
+                      size: 22, color: PAColors.accent),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(widget.topic.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: PAColors.textPrimary)),
+                          ),
+                          Text(widget.timeStr,
+                              style: const TextStyle(
+                                  fontSize: 12, color: PAColors.textMuted)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(widget.timeStr,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 13, color: PAColors.textSecondary)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (_hovered || _confirming)
+                  GestureDetector(
+                    onTap: () {
+                      if (_confirming) {
+                        widget.onDelete();
+                      } else {
+                        setState(() => _confirming = true);
+                        Future.delayed(const Duration(seconds: 3), () {
+                          if (mounted) setState(() => _confirming = false);
+                        });
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _confirming ? PAColors.accent.withValues(alpha: 0.15) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: _confirming
+                          ? const Text('确认', style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: PAColors.accent))
+                          : const Icon(Icons.delete_outline,
+                              size: 18, color: PAColors.textMuted),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

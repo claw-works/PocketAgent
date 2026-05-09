@@ -88,19 +88,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return choice > 0;
   }
 
+  bool _topicCreated = false;
+
   Future<void> _init() async {
     if (widget.topicId != null) {
       _topicId = widget.topicId!;
+      _topicCreated = true;
       final topic = ChatStore.instance.topics.firstWhere((t) => t.id == _topicId);
       _topicTitle = topic.title;
-    } else {
-      final title = widget.harnessSkill?.displayName;
+    } else if (widget.fixedTopicId != null) {
+      // Fixed topic (e.g. command center) — create immediately
       final topic = await ChatStore.instance.create(
-        title: title,
+        title: widget.harnessSkill?.displayName,
         fixedId: widget.fixedTopicId,
       );
       _topicId = topic.id;
       _topicTitle = topic.title;
+      _topicCreated = true;
+    } else {
+      // New conversation — defer topic creation until first message
+      _topicId = const Uuid().v4();
+      _topicTitle = widget.harnessSkill?.displayName ?? '新对话';
     }
 
     // If harness skill, override system prompt
@@ -108,8 +116,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _llm.harnessPrompt = widget.harnessSkill!.fullPrompt;
     }
 
-    await _loadMessages();
-    _scrollToBottom();
+    if (_topicCreated) {
+      await _loadMessages();
+      _scrollToBottom();
+      _watchMessages();
+    }
+  }
+
+  Future<void> _ensureTopicCreated() async {
+    if (_topicCreated) return;
+    _topicCreated = true;
+    final topic = await ChatStore.instance.create(
+      title: widget.harnessSkill?.displayName,
+      fixedId: _topicId,
+    );
+    _topicId = topic.id;
+    _topicTitle = topic.title;
+    _watchMessages();
+  }
+
+  void _watchMessages() {
     ChatStore.instance.watchMessages(_topicId, limit: 100).listen((dbMsgs) {
       if (!mounted) return;
       setState(() {
@@ -155,6 +181,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final text = _inputCtrl.text.trim();
     if (text.isEmpty || _loading) return;
     _inputCtrl.clear();
+
+    await _ensureTopicCreated();
 
     final userMsg = Message(id: _uuid.v4(), role: MessageRole.user, content: text);
     await ChatStore.instance.addMessage(_topicId, userMsg);

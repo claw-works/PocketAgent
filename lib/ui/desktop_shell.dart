@@ -455,37 +455,16 @@ class _DesktopShellState extends State<DesktopShell> {
 
   Widget _topicItem(ChatTopic t) {
     final active = _mainView == _MainView.chat && t.id == _selectedTopicId;
-    return GestureDetector(
+    return _SidebarTopicItem(
+      topic: t,
+      active: active,
       onTap: () => _openChatTopic(t.id),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: active ? PAColors.bgTertiary : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: PAColors.accentSoft,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.chat_bubble_outline,
-                size: 14, color: PAColors.accent),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(t.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: active ? FontWeight.w500 : FontWeight.w400,
-                    color: PAColors.textPrimary)),
-          ),
-        ]),
-      ),
+      onDelete: () {
+        ChatStore.instance.delete(t.id);
+        if (_selectedTopicId == t.id) {
+          setState(() => _selectedTopicId = _commandCenterId);
+        }
+      },
     );
   }
 
@@ -562,9 +541,13 @@ class _DesktopShellState extends State<DesktopShell> {
   }
 
   Widget _settingsPanel() {
-    return _embeddedPage(
-      title: '设置',
-      child: const SettingsMainScreen(),
+    return Container(
+      color: PAColors.bgPrimary,
+      child: Navigator(
+        onGenerateRoute: (_) => MaterialPageRoute(
+          builder: (_) => const SettingsMainScreen(),
+        ),
+      ),
     );
   }
 
@@ -732,6 +715,103 @@ class _AllSkillsBrowserState extends State<_AllSkillsBrowser> {
             Text('${s.sops.length} SOP · 进化 ${s.evolutionCount} 次',
                 style: const TextStyle(fontSize: 10, color: PAColors.textMuted)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Sidebar 对话条目：hover 显示删除图标，点击变确认按钮，再点删除
+class _SidebarTopicItem extends StatefulWidget {
+  final ChatTopic topic;
+  final bool active;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _SidebarTopicItem({
+    required this.topic,
+    required this.active,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  @override
+  State<_SidebarTopicItem> createState() => _SidebarTopicItemState();
+}
+
+class _SidebarTopicItemState extends State<_SidebarTopicItem> {
+  bool _hovered = false;
+  bool _confirming = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() {
+        _hovered = false;
+        _confirming = false;
+      }),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: widget.active ? PAColors.bgTertiary : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: PAColors.accentSoft,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.chat_bubble_outline,
+                  size: 14, color: PAColors.accent),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(widget.topic.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: widget.active ? FontWeight.w500 : FontWeight.w400,
+                      color: PAColors.textPrimary)),
+            ),
+            if (_hovered || _confirming)
+              GestureDetector(
+                onTap: () {
+                  if (_confirming) {
+                    widget.onDelete();
+                  } else {
+                    setState(() => _confirming = true);
+                    Future.delayed(const Duration(seconds: 3), () {
+                      if (mounted) setState(() => _confirming = false);
+                    });
+                  }
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _confirming
+                        ? PAColors.accent.withValues(alpha: 0.15)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: _confirming
+                      ? const Text('确认',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: PAColors.accent))
+                      : const Icon(Icons.delete_outline,
+                          size: 15, color: PAColors.textMuted),
+                ),
+              ),
+          ]),
         ),
       ),
     );

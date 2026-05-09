@@ -52,6 +52,55 @@ class SkillRegistry extends ChangeNotifier {
     return buf.toString();
   }
 
+  /// 根据 URL 域名查找匹配的 skill，返回相关 skill 的提示文本。
+  /// skill 名称包含域名关键词即匹配（如 skill "google_search" 匹配 "google.com"）。
+  String getSkillsForUrl(String url) {
+    try {
+      final host = Uri.parse(url).host; // e.g. "www.google.com"
+      if (host.isEmpty) return '';
+      // 提取主域名关键词：google.com → google, x.com → x, amazon.co.jp → amazon
+      final parts = host.split('.');
+      final keywords = <String>{};
+      for (final p in parts) {
+        if (p.length > 2 && p != 'www' && p != 'com' && p != 'org' && p != 'net' && p != 'co') {
+          keywords.add(p.toLowerCase());
+        }
+      }
+      if (keywords.isEmpty) return '';
+
+      final matched = <Skill>[];
+      for (final skill in _skills.values) {
+        final name = skill.name.toLowerCase();
+        for (final kw in keywords) {
+          if (name.contains(kw)) {
+            matched.add(skill);
+            break;
+          }
+        }
+      }
+      // 也检查 harness skills
+      for (final hs in _harnessSkills.values) {
+        final name = hs.name.toLowerCase();
+        for (final kw in keywords) {
+          if (name.contains(kw)) {
+            matched.add(Skill(name: hs.name, skillPrompt: hs.skillPrompt, sops: hs.sops));
+            break;
+          }
+        }
+      }
+
+      if (matched.isEmpty) return '';
+      final buf = StringBuffer();
+      for (final s in matched) {
+        buf.writeln('\n📋 已匹配技能「${s.name}」的操作指南：');
+        buf.writeln(s.fullPrompt);
+      }
+      return buf.toString();
+    } catch (_) {
+      return '';
+    }
+  }
+
   Future<void> load() async {
     final dirPath = await skillsDir;
     final dir = Directory(dirPath);
@@ -305,6 +354,115 @@ class SkillRegistry extends ChangeNotifier {
 2. 用 get_content 了解页面结构
 3. 用精准的 CSS 选择器操作元素
 4. 操作后截图确认结果
+''');
+
+    // Built-in regular skill: Browser Interaction Techniques
+    // 参考 browser-harness interaction-skills，覆盖常见浏览器交互难点
+    final interactionDir = Directory('$dirPath/browser_interactions');
+    await interactionDir.create(recursive: true);
+    await File('${interactionDir.path}/skill.md').writeAsString('''
+# 浏览器交互技巧手册
+
+当你在操控浏览器时遇到以下场景，参考对应的 SOP：
+- iframe 内容操作 → iframe
+- Shadow DOM 元素操作 → shadow_dom
+- 文件上传 → upload
+- 页面滚动 → scroll
+- 弹窗/对话框处理 → dialog
+- 下拉菜单操作 → dropdown
+
+## 核心原则
+1. **Skill 优先**：有 SOP/选择器参考时直接用，最快最稳
+2. **截图兜底**：选择器失效或陌生网站时，截图 → click_at_xy 坐标点击
+3. **操作后验证**：每次有意义的操作后截图确认结果
+4. **遇到登录墙**：停下来让用户手动登录，不要尝试输入凭据
+''');
+
+    await File('${interactionDir.path}/iframe.md').writeAsString('''
+# iframe 交互
+
+## 坐标点击（推荐）
+click_at_xy 直接穿透 iframe，不需要切换上下文：
+1. 截图找到 iframe 内目标元素的坐标
+2. browser(click_at_xy, x: ..., y: ...)
+3. 截图验证
+
+## JS 方式（需要读取 iframe 内容时）
+同源 iframe: document.querySelector("iframe").contentDocument.querySelector("button").click()
+跨域 iframe: JS 无法访问 DOM，只能用坐标点击
+''');
+
+    await File('${interactionDir.path}/shadow_dom.md').writeAsString('''
+# Shadow DOM 交互
+
+## 坐标点击（推荐）
+click_at_xy 穿透 shadow DOM，无需特殊处理。
+
+## JS 方式
+逐层穿透: element.shadowRoot.querySelector("target")
+深层嵌套需逐层 .shadowRoot.querySelector()
+closed shadow root 无法用 JS 访问，只能坐标点击
+''');
+
+    await File('${interactionDir.path}/upload.md').writeAsString('''
+# 文件上传
+
+文件上传不能通过点击完成（会弹出系统文件选择器），用 CDP 直接设置：
+1. 用 JS 找到 input[type="file"] 元素
+2. 用 CDP DOM.setFileInputFiles 设置文件路径
+3. 隐藏的 file input 也可以直接设置，不需要可见
+''');
+
+    await File('${interactionDir.path}/scroll.md').writeAsString('''
+# 页面滚动
+
+## 滚到底部
+window.scrollTo(0, document.body.scrollHeight)
+
+## 滚到元素
+element.scrollIntoView({behavior: "smooth", block: "center"})
+
+## 容器内滚动（非 window）
+很多现代网站滚动容器是某个 div 而非 window：
+container.scrollTop = container.scrollHeight
+
+## 无限滚动
+滚到底 → 等 1-2 秒 → 检查内容数量是否增加 → 重复
+''');
+
+    await File('${interactionDir.path}/dialog.md').writeAsString('''
+# 弹窗处理
+
+## JS 原生弹窗
+window.alert = () => {}
+window.confirm = () => true
+
+## Cookie 同意弹窗
+常见选择器: [class*="cookie"] button, #onetrust-accept-btn-handler, .cc-btn.cc-dismiss
+
+## 模态框
+找关闭按钮，或发送 Escape 键
+
+## beforeunload
+window.onbeforeunload = null
+''');
+
+    await File('${interactionDir.path}/dropdown.md').writeAsString('''
+# 下拉菜单
+
+## 原生 select
+select.value = "value"; select.dispatchEvent(new Event("change", {bubbles: true}))
+
+## 自定义下拉框（React/Vue）
+1. 点击触发器打开下拉
+2. 等待列表出现
+3. 点击目标选项
+4. 截图验证
+
+## 注意
+- React combobox 有时需要按 Escape 确认
+- 选项可能在 portal 中渲染（body 下而非组件内）
+- 坐标点击对所有类型下拉框都有效
 ''');
 
     await load();

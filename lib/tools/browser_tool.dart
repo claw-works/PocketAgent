@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'base_tool.dart';
 import '../services/cdp_client.dart';
+import '../services/skill/skill_registry.dart';
 
 /// 🌐 Browser control via Chrome DevTools Protocol.
 /// Can navigate, read DOM, execute JS, click elements, fill forms, screenshot.
@@ -14,7 +15,9 @@ class BrowserTool extends BaseTool {
   @override
   String get description =>
       '通过 Chrome DevTools Protocol 操控浏览器：导航、读取页面内容、执行 JavaScript、'
-      '点击元素、填写表单、截图。首次使用会自动启动 Chrome。';
+      '点击元素（CSS 选择器或坐标）、填写表单、截图、等待加载。首次使用会自动启动 Chrome。\n'
+      '操作策略：有 Skill/SOP 时直接用选择器（最快）；选择器失效或陌生网站时，'
+      '用截图 → click_at_xy 坐标点击（穿透 iframe/shadow DOM）。';
 
   @override
   bool get requiresConfirmation => true;
@@ -31,24 +34,30 @@ class BrowserTool extends BaseTool {
               'get_content',
               'execute_js',
               'click',
+              'click_at_xy',
               'type_text',
               'screenshot',
               'get_tabs',
+              'wait_for_load',
             ],
             'description':
                 'connect: 连接/启动 Chrome; '
-                'navigate: 打开 URL; '
+                'navigate: 打开 URL（自动等待加载完成）; '
                 'get_content: 获取页面文本或 HTML; '
                 'execute_js: 执行 JavaScript; '
                 'click: 点击 CSS 选择器匹配的元素; '
+                'click_at_xy: 在指定坐标点击（穿透 iframe/shadow DOM）; '
                 'type_text: 在输入框中输入文字; '
                 'screenshot: 截取页面截图; '
-                'get_tabs: 获取所有标签页',
+                'get_tabs: 获取所有标签页; '
+                'wait_for_load: 等待页面加载完成',
           },
           'url': {'type': 'string', 'description': '目标 URL（navigate 时必填）'},
           'selector': {'type': 'string', 'description': 'CSS 选择器（click/type_text 时必填）'},
           'text': {'type': 'string', 'description': '要输入的文字（type_text 时必填）'},
           'expression': {'type': 'string', 'description': 'JavaScript 表达式（execute_js 时必填）'},
+          'x': {'type': 'number', 'description': 'X 坐标（click_at_xy 时必填）'},
+          'y': {'type': 'number', 'description': 'Y 坐标（click_at_xy 时必填）'},
           'format': {
             'type': 'string',
             'enum': ['text', 'html'],
@@ -75,11 +84,18 @@ class BrowserTool extends BaseTool {
 
         case 'navigate':
           final url = args['url'] as String? ?? '';
+          // 先注册 load 事件监听，再发起导航
+          final loadFuture = _cdp.waitForLoad(timeout: const Duration(seconds: 15));
           final result = await _cdp.send('Page.navigate', {'url': url});
           if (result['error'] != null) return _err(result['error']['message']);
-          // Wait for page load
-          await Future.delayed(const Duration(seconds: 1));
-          return _ok('已导航到 $url');
+          await loadFuture;
+          // 按域名查找匹配的 skill
+          final skillHint = SkillRegistry.instance.getSkillsForUrl(url);
+          final msg = StringBuffer('已导航到 $url（页面已加载完成）。💡 建议截图查看当前页面状态');
+          if (skillHint.isNotEmpty) {
+            msg.write('\n\n$skillHint');
+          }
+          return _ok(msg.toString());
 
         case 'get_content':
           final format = args['format'] ?? 'text';
@@ -99,7 +115,21 @@ class BrowserTool extends BaseTool {
         case 'click':
           final selector = args['selector'] as String? ?? '';
           await _evalJs('document.querySelector(${jsonEncode(selector)})?.click()');
-          return _ok('已点击 $selector');
+          return _ok('已点击 $selector。💡 建议截图验证点击效果');
+
+        case 'click_at_xy':
+          final x = (args['x'] as num).toDouble();
+          final y = (args['y'] as num).toDouble();
+          // Input.dispatchMouseEvent 走 compositor 层，穿透 iframe/shadow DOM/跨域
+          await _cdp.send('Input.dispatchMouseEvent', {
+            'type': 'mousePressed', 'x': x, 'y': y,
+            'button': 'left', 'clickCount': 1,
+          });
+          await _cdp.send('Input.dispatchMouseEvent', {
+            'type': 'mouseReleased', 'x': x, 'y': y,
+            'button': 'left', 'clickCount': 1,
+          });
+          return _ok('已点击坐标 ($x, $y)。💡 建议截图验证点击效果');
 
         case 'type_text':
           final selector = args['selector'] as String? ?? '';
@@ -109,7 +139,11 @@ class BrowserTool extends BaseTool {
             'if(el){el.focus(); el.value = ${jsonEncode(text)}; '
             'el.dispatchEvent(new Event("input",{bubbles:true}));}',
           );
-          return _ok('已在 $selector 输入文字');
+          return _ok('已在 $selector 输入文字。💡 建议截图验证输入结果');
+
+        case 'wait_for_load':
+          await _cdp.waitForLoad();
+          return _ok('页面已加载完成');
 
         case 'screenshot':
           // CDP 截图不需要窗口前台，直接从渲染引擎抓 bitmap
